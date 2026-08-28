@@ -2,11 +2,12 @@
 
 /**
  * 拖拽交互 ——
- * 1. 从元件面板拖入放置；
- * 2. 拖拽已放置元件的引脚手柄（伸缩引线）；
- * 3. 拖拽旋转手柄（任意角度旋转）。
+ * 1. 从元件面板拖入放置（引脚端点吸附孔位）；
+ * 2. 拖拽元件身体移动；
+ * 3. 拖拽引脚端点（伸缩/改变方向，吸附孔位）；
+ * 4. 拖拽旋转手柄（任意角度旋转，刚性 IC 除外）。
  *
- * 采用指针事件（pointerdown/move/up）并注册到 window，便于跨元素拖动。
+ * 刚性 IC 锁定在端子排 e/f 两列，拖拽时高亮该两列。
  */
 
 import type { BreadboardLayout, ComponentRotation } from "../types/domain";
@@ -19,7 +20,7 @@ import {
   nextRefdes,
   updatePlaced,
 } from "../store/circuitStore";
-import { buildInstance, nearestNode, rotateOffset } from "./placement";
+import { buildInstance, getRigidLockX, nearestNode, rotateOffset } from "./placement";
 
 export interface DragContext {
   svg: SVGSVGElement;
@@ -28,6 +29,7 @@ export interface DragContext {
 }
 
 const DRAG_LAYER_ID = "component-drag-layer";
+const IC_HIGHLIGHT_ID = "ic-column-highlight";
 
 function ensureDragLayer(svg: SVGSVGElement): SVGGElement {
   let layer = svg.querySelector<SVGGElement>(`#${DRAG_LAYER_ID}`);
@@ -40,7 +42,35 @@ function ensureDragLayer(svg: SVGSVGElement): SVGGElement {
   return layer;
 }
 
-/** 1. 从面板拖入元件，松手时以光标位置为身体原点放置。 */
+/** 高亮/清除端子排 e、f 两列（IC 可放置区域）。 */
+function setIcColumnHighlight(ctx: DragContext, visible: boolean): void {
+  let layer = ctx.svg.querySelector<SVGGElement>(`#${IC_HIGHLIGHT_ID}`);
+  if (!layer) {
+    layer = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    layer.setAttribute("id", IC_HIGHLIGHT_ID);
+    layer.setAttribute("pointer-events", "none");
+    ctx.svg.appendChild(layer);
+  }
+  layer.replaceChildren();
+  if (!visible) return;
+
+  const colE = ctx.layout.nodes.find((n) => n.row === "e");
+  const colF = ctx.layout.nodes.find((n) => n.row === "f");
+  if (!colE || !colF) return;
+  const ys = ctx.layout.nodes.filter((n) => n.row === "e" || n.row === "f").map((n) => n.y);
+  const minY = Math.min(...ys) - 6;
+  const maxY = Math.max(...ys) + 6;
+
+  const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  rect.setAttribute("x", (colE.x - 5).toFixed(2));
+  rect.setAttribute("y", minY.toFixed(2));
+  rect.setAttribute("width", (colF.x - colE.x + 10).toFixed(2));
+  rect.setAttribute("height", (maxY - minY).toFixed(2));
+  rect.setAttribute("fill", "rgba(37,99,235,0.16)");
+  layer.appendChild(rect);
+}
+
+/** 1. 从面板拖入元件。 */
 export function startComponentDrag(
   ctx: DragContext,
   entry: CatalogEntry,
@@ -56,6 +86,8 @@ export function startComponentDrag(
   ghost.appendChild(symbol.template.cloneNode(true));
   layer.appendChild(ghost);
 
+  if (entry.rigid) setIcColumnHighlight(ctx, true);
+
   let rotation: ComponentRotation = 0;
   let last = clientToViewBox(ctx.svg, startClientX, startClientY);
 
@@ -69,6 +101,7 @@ export function startComponentDrag(
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onCancel);
     window.removeEventListener("keydown", onKey);
+    setIcColumnHighlight(ctx, false);
     ghost.remove();
   };
 
@@ -79,7 +112,7 @@ export function startComponentDrag(
   }
 
   function onKey(e: KeyboardEvent): void {
-    if (e.key === "r" || e.key === "R") {
+    if ((e.key === "r" || e.key === "R") && !entry.rigid) {
       rotation = (rotation + 90) % 360;
       apply();
       e.preventDefault();
@@ -89,19 +122,17 @@ export function startComponentDrag(
   function onUp(e: PointerEvent): void {
     cleanup();
     const p = clientToViewBox(ctx.svg, e.clientX, e.clientY);
-    // 只有落在面包板附近（距离某孔位 40 单位内）才放置。
-    if (nearestNode(ctx.layout, p.x, p.y, 40)) {
-      const instance = buildInstance(
-        entry,
-        nextId(),
-        nextRefdes(entry.prefix),
-        p.x,
-        p.y,
-        rotation,
-        ctx.layout,
-      );
-      addPlaced(entry.id, instance);
+    if (!nearestNode(ctx.layout, p.x, p.y, 40)) return;
+
+    let px = p.x;
+    let rot = rotation;
+    const lockX = getRigidLockX(ctx.layout, entry);
+    if (lockX !== null) {
+      px = lockX;
+      rot = 0;
     }
+    const instance = buildInstance(entry, nextId(), nextRefdes(entry.prefix), px, p.y, rot, ctx.layout);
+    addPlaced(entry.id, instance);
   }
 
   function onCancel(): void {
@@ -114,7 +145,61 @@ export function startComponentDrag(
   window.addEventListener("keydown", onKey);
 }
 
-/** 2. 拖拽引脚手柄：把该引脚引线端点吸附到最近孔位（伸缩引线）。 */
+/** 2. 拖拽元件身体移动。 */
+export function startBodyDrag(
+  ctx: DragContext,
+  componentId: string,
+  startClientX: number,
+  startClientY: number,
+  onDone: (moved: boolean) => void,
+): void {
+  const item = getPlacedItem(componentId);
+  if (!item) {
+    onDone(false);
+    return;
+  }
+  const entry = ctx.symbols.get(item.symbolId)?.entry;
+  const ins = item.instance;
+  const lockX = entry ? getRigidLockX(ctx.layout, entry) : null;
+  const start = clientToViewBox(ctx.svg, startClientX, startClientY);
+  const baseX = ins.x;
+  const baseY = ins.y;
+  let moved = false;
+
+  if (entry?.rigid) setIcColumnHighlight(ctx, true);
+
+  const onMove = (e: PointerEvent): void => {
+    const p = clientToViewBox(ctx.svg, e.clientX, e.clientY);
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    if (Math.hypot(dx, dy) > 2) moved = true;
+    updatePlaced(componentId, (i) => {
+      i.x = lockX !== null ? lockX : baseX + dx;
+      i.y = baseY + dy;
+      if (entry?.rigid) {
+        i.pins.forEach((pin, idx) => {
+          const t = entry.terminals[idx];
+          const r = rotateOffset(t.x, t.y, i.rotation);
+          const node = nearestNode(ctx.layout, i.x + r.x, i.y + r.y, 22);
+          pin.node = node?.id;
+        });
+      }
+    });
+    e.preventDefault();
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    setIcColumnHighlight(ctx, false);
+    onDone(moved);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+/** 3. 拖拽引脚端点：伸缩/改变方向并吸附孔位。 */
 export function startPinDrag(
   ctx: DragContext,
   componentId: string,
@@ -146,58 +231,7 @@ export function startPinDrag(
   window.addEventListener("pointercancel", onUp);
 }
 
-/** 2b. 拖拽元件身体：移动 (x, y)；若几乎没移动则视为点击（用于选中）。 */
-export function startBodyDrag(
-  ctx: DragContext,
-  componentId: string,
-  startClientX: number,
-  startClientY: number,
-  onDone: (moved: boolean) => void,
-): void {
-  const item = getPlacedItem(componentId);
-  if (!item) {
-    onDone(false);
-    return;
-  }
-  const entry = ctx.symbols.get(item.symbolId)?.entry;
-  const ins = item.instance;
-  const start = clientToViewBox(ctx.svg, startClientX, startClientY);
-  const baseX = ins.x;
-  const baseY = ins.y;
-  let moved = false;
-
-  const onMove = (e: PointerEvent): void => {
-    const p = clientToViewBox(ctx.svg, e.clientX, e.clientY);
-    const dx = p.x - start.x;
-    const dy = p.y - start.y;
-    if (Math.hypot(dx, dy) > 2) moved = true;
-    updatePlaced(componentId, (i) => {
-      i.x = baseX + dx;
-      i.y = baseY + dy;
-      // 刚性引脚元件移动后，引脚重新吸附到最近孔位。
-      if (entry?.rigid) {
-        i.pins.forEach((pin, idx) => {
-          const t = entry.terminals[idx];
-          const r = rotateOffset(t.x, t.y, i.rotation);
-          const node = nearestNode(ctx.layout, i.x + r.x, i.y + r.y, 22);
-          pin.node = node?.id;
-        });
-      }
-    });
-    e.preventDefault();
-  };
-  const onUp = (): void => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-    window.removeEventListener("pointercancel", onUp);
-    onDone(moved);
-  };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointercancel", onUp);
-}
-
-/** 3. 拖拽旋转手柄：绕身体原点任意角度旋转。 */
+/** 4. 拖拽旋转手柄：绕身体原点任意角度旋转（刚性 IC 锁定，不旋转）。 */
 export function startRotateDrag(
   ctx: DragContext,
   componentId: string,
@@ -206,8 +240,10 @@ export function startRotateDrag(
 ): void {
   const item = getPlacedItem(componentId);
   if (!item) return;
-  const ins = item.instance;
+  const entry = ctx.symbols.get(item.symbolId)?.entry;
+  if (entry?.rigid) return; // 刚性 IC 不可旋转
 
+  const ins = item.instance;
   const p0 = clientToViewBox(ctx.svg, startClientX, startClientY);
   const baseAngle = Math.atan2(p0.y - ins.y, p0.x - ins.x);
   const baseRotation = ins.rotation;

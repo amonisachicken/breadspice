@@ -93,3 +93,18 @@ export function buildInstance(
     rotation,
   };
 }
+
+/**
+ * 刚性引脚元件（DIP-8）的锁定 x 坐标：让最左引脚落在端子排 e 列，
+ * 从而最右引脚自然落在 f 列（跨过中间凹槽）。非 rigid 返回 null。
+ */
+export function getRigidLockX(
+  layout: BreadboardLayout,
+  entry: CatalogEntry,
+): number | null {
+  if (!entry.rigid) return null;
+  const colE = layout.nodes.find((n) => n.row === "e");
+  const minX = entry.terminals.reduce((m, t) => Math.min(m, t.x), Infinity);
+  if (!colE || minX === Infinity) return null;
+  return colE.x - minX;
+}

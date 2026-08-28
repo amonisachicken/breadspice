@@ -45,7 +45,8 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
   let baseWidth: number = BREADBOARD_ASSET.viewBox.width;
   let baseHeight: number = BREADBOARD_ASSET.viewBox.height;
   if (bbox && bbox.width > 0 && bbox.height > 0) {
-    const pad = 8;
+    // 四周留出工作区，便于把元件/导线放到面包板之外（配合缩放/平移）。
+    const pad = 150;
     const w = bbox.width + pad * 2;
     const h = bbox.height + pad * 2;
     svg.setAttribute("viewBox", `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
