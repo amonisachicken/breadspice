@@ -54,6 +54,8 @@ export interface CatalogEntry {
   info?: string;
   /** 程序化绘制身体（无 SVG 资产的元件，如电池）。 */
   bodyFactory?: () => SVGGElement;
+  /** 弯导线（kind="wire" 且 curve=true 时为平滑贝塞尔曲线）。 */
+  curve?: boolean;
 }
 
 const DIODE_TERMINALS: TerminalDef[] = [
@@ -315,11 +317,11 @@ export const CATALOG: CatalogEntry[] = [
     info: "电池 / 直流电压源\n双击蓝点设置电压\n后端映射为 ngspice 电压源（V 器件）",
   },
 
-  // —— 导线（跳线，可弯曲）——
+  // —— 导线（直导线 + 弯导线）——
   {
     id: "wire",
     kind: "wire",
-    label: "导线",
+    label: "直导线",
     value: "",
     prefix: "W",
     bodyPathIds: [],
@@ -328,7 +330,22 @@ export const CATALOG: CatalogEntry[] = [
       { name: "1", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
       { name: "2", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
     ],
-    info: "导线（跳线）\n拖动蓝点弯曲、拖动端点改接孔位\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+    info: "直导线（跳线）\n只能拖动两个端点改接孔位\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+  },
+  {
+    id: "wire-curve",
+    kind: "wire",
+    label: "弯导线",
+    value: "",
+    prefix: "W",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    terminals: [
+      { name: "1", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
+      { name: "2", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
+    ],
+    curve: true,
+    info: "弯导线（平滑曲线）\n拖动两端点改接孔位，拖动蓝点调整曲率\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
   },
 ];
 

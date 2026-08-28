@@ -146,6 +146,7 @@ export function snapRigidY(
 /**
  * 构造导线实例：端点 1 吸附在 (x, y) 附近孔位，端点 2 默认向
  * 右（或向下，vertical=true）延伸 36 单位后吸附最近孔位。
+ * curve=true 时为弯导线，附加一个位于两端点中点的贝塞尔控制点。
  */
 export function buildWireInstance(
   id: string,
@@ -153,6 +154,7 @@ export function buildWireInstance(
   x: number,
   y: number,
   vertical: boolean,
+  curve: boolean,
   color: string,
   layout: BreadboardLayout,
 ): ComponentInstance {
@@ -175,12 +177,12 @@ export function buildWireInstance(
     x: (s1.x + s2.x) / 2,
     y: (s1.y + s2.y) / 2,
     rotation: 0,
-    bends: [],
+    control: curve ? { x: (s1.x + s2.x) / 2, y: (s1.y + s2.y) / 2 } : undefined,
     color,
   };
 }
 
-/** 把导线整体绕两端点中点旋转 90°（折点跟随），并重新吸附端点。 */
+/** 把导线整体绕两端点中点旋转 90°（控制点跟随），并重新吸附端点。 */
 export function rotateWire(ins: ComponentInstance, layout: BreadboardLayout): void {
   const e0 = ins.pins[0];
   const e1 = ins.pins[1];
@@ -210,9 +212,9 @@ export function rotateWire(ins: ComponentInstance, layout: BreadboardLayout): vo
     e1.y = h1.y;
     e1.node = h1.id;
   }
-  for (const b of ins.bends ?? []) {
-    const nb = rot(b);
-    b.x = nb.x;
-    b.y = nb.y;
+  if (ins.control) {
+    const nc = rot(ins.control);
+    ins.control.x = nc.x;
+    ins.control.y = nc.y;
   }
 }

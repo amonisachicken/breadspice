@@ -331,6 +331,7 @@ export function startWireDrag(
       p.x,
       p.y,
       vertical,
+      Boolean(entry.curve),
       DEFAULT_WIRE_COLOR,
       ctx.layout,
     );
@@ -379,69 +380,19 @@ export function startWireEndpointDrag(
   window.addEventListener("pointercancel", onUp);
 }
 
-/** 7. 拖拽导线折点（移动已存在的折点）。 */
-export function startWireBendDrag(
+/** 7. 拖拽弯导线的控制点（调整曲率）。 */
+export function startWireControlDrag(
   ctx: DragContext,
   componentId: string,
-  bendIndex: number,
   startClientX: number,
   startClientY: number,
 ): void {
   const move = (cx: number, cy: number): void => {
     const p = clientToViewBox(ctx.svg, cx, cy);
     updatePlaced(componentId, (ins) => {
-      const b = ins.bends?.[bendIndex];
-      if (b) {
-        b.x = p.x;
-        b.y = p.y;
-      }
-    });
-  };
-  move(startClientX, startClientY);
-
-  const onMove = (e: PointerEvent): void => {
-    move(e.clientX, e.clientY);
-    e.preventDefault();
-  };
-  const onUp = (): void => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-    window.removeEventListener("pointercancel", onUp);
-  };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointercancel", onUp);
-}
-
-/** 8. 拖拽导线线段中点：在该处插入新折点并继续拖拽。 */
-export function startWireAddBend(
-  ctx: DragContext,
-  componentId: string,
-  segmentIndex: number,
-  startClientX: number,
-  startClientY: number,
-): void {
-  let inserted = false;
-
-  const move = (cx: number, cy: number): void => {
-    const p = clientToViewBox(ctx.svg, cx, cy);
-    updatePlaced(componentId, (ins) => {
-      const e0 = ins.pins[0];
-      const e1 = ins.pins[1];
-      if (!e0 || !e1) return;
-      const bends = ins.bends ?? (ins.bends = []);
-      if (!inserted) {
-        const pts = [e0, ...bends, e1];
-        const a = pts[segmentIndex];
-        const b = pts[segmentIndex + 1];
-        if (!a || !b) return;
-        bends.splice(segmentIndex, 0, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-        inserted = true;
-      }
-      const b = bends[segmentIndex];
-      if (b) {
-        b.x = p.x;
-        b.y = p.y;
+      if (ins.control) {
+        ins.control.x = p.x;
+        ins.control.y = p.y;
       }
     });
   };

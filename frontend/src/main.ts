@@ -21,8 +21,7 @@ import {
   startBodyDrag,
   startPinDrag,
   startRotateDrag,
-  startWireAddBend,
-  startWireBendDrag,
+  startWireControlDrag,
   startWireEndpointDrag,
   type DragContext,
 } from "./interaction/drag";
@@ -133,21 +132,11 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
 
-  const bend = el.closest?.("[data-wire-bend]");
-  if (bend) {
-    const id = bend.getAttribute("data-component-id")!;
-    const idx = Number(bend.getAttribute("data-wire-bend"));
+  const control = el.closest?.("[data-wire-control]");
+  if (control) {
+    const id = control.getAttribute("data-component-id")!;
     e.preventDefault();
-    startWireBendDrag(dragCtx, id, idx, e.clientX, e.clientY);
-    return;
-  }
-
-  const addBend = el.closest?.("[data-wire-add]");
-  if (addBend) {
-    const id = addBend.getAttribute("data-component-id")!;
-    const idx = Number(addBend.getAttribute("data-wire-add"));
-    e.preventDefault();
-    startWireAddBend(dragCtx, id, idx, e.clientX, e.clientY);
+    startWireControlDrag(dragCtx, id, e.clientX, e.clientY);
     return;
   }
 
@@ -172,6 +161,13 @@ canvas.addEventListener("pointerdown", (e) => {
   const body = el.closest?.("[data-component-id]");
   if (body) {
     const id = body.getAttribute("data-component-id")!;
+    // 导线本体不可拖动，仅点击选中
+    if (getPlacedItem(id)?.instance.kind === "wire") {
+      e.preventDefault();
+      selectedId = id;
+      render();
+      return;
+    }
     e.preventDefault();
     startBodyDrag(dragCtx, id, e.clientX, e.clientY, (moved) => {
       if (!moved) {

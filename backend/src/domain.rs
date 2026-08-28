@@ -81,7 +81,7 @@ pub struct ComponentPin {
 /// 元件旋转角（度，任意实数）。与前端 `ComponentRotation = number` 对应。
 pub type ComponentRotation = f64;
 
-/// 导线折点（viewBox 绝对坐标）。
+/// 导线控制点（viewBox 绝对坐标）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BendPoint {
@@ -106,8 +106,8 @@ pub struct ComponentInstance {
     pub x: f64,
     pub y: f64,
     pub rotation: ComponentRotation,
-    /// 导线折点（仅 kind=Wire 使用）。
-    pub bends: Option<Vec<BendPoint>>,
+    /// 弯导线控制点（二次贝塞尔曲线，仅 kind=Wire 使用）。
+    pub control: Option<BendPoint>,
     /// 导线颜色（仅 kind=Wire 使用）。
     pub color: Option<String>,
 }

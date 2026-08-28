@@ -104,8 +104,8 @@ export interface ComponentInstance {
   y: number;
   /** 旋转角（度，任意实数）。 */
   rotation: ComponentRotation;
-  /** 导线弯曲点（中间折点，viewBox 绝对坐标）。仅 kind="wire" 使用。 */
-  bends?: { x: number; y: number }[];
+  /** 弯导线的控制点（viewBox 绝对坐标，二次贝塞尔曲线）。仅弯导线使用。 */
+  control?: { x: number; y: number };
   /** 导线颜色（CSS 颜色字符串）。仅 kind="wire" 使用。 */
   color?: string;
 }

@@ -33,25 +33,66 @@ function makeCircle(cx: number, cy: number, r: number, fill: string): SVGCircleE
   return c;
 }
 
-/** 渲染导线：折线 + 端点/折点手柄 + 线段中点（新增折点）。 */
-function renderWire(wrapper: SVGGElement, ins: ComponentInstance, selected: boolean): void {
+/** 渲染导线：直导线为直线，弯导线为二次贝塞尔曲线 + 蓝点控制柄。 */
+function renderWire(
+  wrapper: SVGGElement,
+  ins: ComponentInstance,
+  selected: boolean,
+  curve: boolean,
+): void {
   const e0 = ins.pins[0];
   const e1 = ins.pins[1];
   if (!e0 || !e1) return;
   const color = ins.color ?? "#2563eb";
-  const bends = ins.bends ?? [];
-  const pts = [{ x: e0.x, y: e0.y }, ...bends, { x: e1.x, y: e1.y }];
 
-  const polyline = document.createElementNS(SVG_NS, "polyline") as SVGPolylineElement;
-  polyline.setAttribute("points", pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" "));
-  polyline.setAttribute("fill", "none");
-  polyline.setAttribute("stroke", color);
-  polyline.setAttribute("stroke-width", "1.6");
-  polyline.setAttribute("stroke-linejoin", "round");
-  polyline.setAttribute("stroke-linecap", "round");
-  polyline.setAttribute("pointer-events", "stroke");
-  polyline.style.cursor = "grab";
-  wrapper.appendChild(polyline);
+  if (curve) {
+    const c = ins.control ?? { x: (e0.x + e1.x) / 2, y: (e0.y + e1.y) / 2 };
+
+    // 控制点到两端点的辅助虚线（帮助理解曲率）
+    for (const p of [e0, e1]) {
+      const guide = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+      guide.setAttribute("x1", p.x.toFixed(2));
+      guide.setAttribute("y1", p.y.toFixed(2));
+      guide.setAttribute("x2", c.x.toFixed(2));
+      guide.setAttribute("y2", c.y.toFixed(2));
+      guide.setAttribute("stroke", "#cbd5e1");
+      guide.setAttribute("stroke-width", "0.8");
+      guide.setAttribute("stroke-dasharray", "2 2");
+      guide.setAttribute("pointer-events", "none");
+      wrapper.appendChild(guide);
+    }
+
+    const path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+    path.setAttribute("d", `M ${e0.x.toFixed(2)} ${e0.y.toFixed(2)} Q ${c.x.toFixed(2)} ${c.y.toFixed(2)} ${e1.x.toFixed(2)} ${e1.y.toFixed(2)}`);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", color);
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("pointer-events", "stroke");
+    path.style.cursor = "pointer";
+    wrapper.appendChild(path);
+
+    // 控制点手柄（蓝点）
+    const ch = makeCircle(c.x, c.y, 3, "#2563eb");
+    ch.setAttribute("stroke", "#fff");
+    ch.setAttribute("stroke-width", "0.7");
+    ch.dataset.componentId = ins.id;
+    ch.dataset.wireControl = "1";
+    ch.style.cursor = "crosshair";
+    wrapper.appendChild(ch);
+  } else {
+    const line = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+    line.setAttribute("x1", e0.x.toFixed(2));
+    line.setAttribute("y1", e0.y.toFixed(2));
+    line.setAttribute("x2", e1.x.toFixed(2));
+    line.setAttribute("y2", e1.y.toFixed(2));
+    line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", "1.6");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("pointer-events", "stroke");
+    line.style.cursor = "pointer";
+    wrapper.appendChild(line);
+  }
 
   // 端点手柄（绿）
   [e0, e1].forEach((p, i) => {
@@ -63,30 +104,6 @@ function renderWire(wrapper: SVGGElement, ins: ComponentInstance, selected: bool
     h.style.cursor = "crosshair";
     wrapper.appendChild(h);
   });
-
-  // 折点手柄（蓝实心）
-  bends.forEach((b, i) => {
-    const h = makeCircle(b.x, b.y, 3, "#2563eb");
-    h.setAttribute("stroke", "#fff");
-    h.setAttribute("stroke-width", "0.7");
-    h.dataset.componentId = ins.id;
-    h.dataset.wireBend = String(i);
-    h.style.cursor = "crosshair";
-    wrapper.appendChild(h);
-  });
-
-  // 线段中点（蓝空心，拖出新增折点）
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    const h = makeCircle((a.x + b.x) / 2, (a.y + b.y) / 2, 2.4, "rgba(255,255,255,0.7)");
-    h.setAttribute("stroke", "#2563eb");
-    h.setAttribute("stroke-width", "0.9");
-    h.dataset.componentId = ins.id;
-    h.dataset.wireAdd = String(i);
-    h.style.cursor = "crosshair";
-    wrapper.appendChild(h);
-  }
 
   const midX = (e0.x + e1.x) / 2;
   const midY = (e0.y + e1.y) / 2;
@@ -134,9 +151,9 @@ export function renderPlacedComponents(
     const wrapper = document.createElementNS(SVG_NS, "g") as SVGGElement;
     wrapper.dataset.componentId = ins.id;
 
-    // 导线：走专用折线渲染（无身体、无旋转手柄）
+    // 导线：走专用渲染（直导线=直线，弯导线=贝塞尔曲线）
     if (ins.kind === "wire") {
-      renderWire(wrapper, ins, selected);
+      renderWire(wrapper, ins, selected, Boolean(built.entry.curve));
       layer.appendChild(wrapper);
       continue;
     }
