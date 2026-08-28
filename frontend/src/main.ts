@@ -109,6 +109,8 @@ renderComponentPalette(paletteList, symbols, dragCtx);
 
 // —— 放置状态与选中 ——
 let selectedId: string | null = null;
+// 双击检测（基于时间+屏幕位置，避免 DOM 重渲染导致原生 dblclick 失效）
+let lastClick: { id: string; time: number; x: number; y: number } | null = null;
 
 function render(): void {
   renderPlacedComponents({ svg, layout, symbols, selectedId }, getPlaced());
@@ -123,6 +125,27 @@ render();
 // —— 已放置元件交互 + 画布平移（事件委托，统一挂在 canvas 上）——
 canvas.addEventListener("pointerdown", (e) => {
   const el = e.target as Element;
+
+  // 先做双击检测：同一元件、时间与位置足够接近即视为双击
+  const compEl = el.closest?.("[data-component-id]");
+  if (compEl) {
+    const id = compEl.getAttribute("data-component-id")!;
+    const now = Date.now();
+    if (
+      lastClick &&
+      lastClick.id === id &&
+      now - lastClick.time < 500 &&
+      Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 10
+    ) {
+      lastClick = null;
+      openComponentDialog(id);
+      e.preventDefault();
+      return;
+    }
+    lastClick = { id, time: now, x: e.clientX, y: e.clientY };
+  } else {
+    lastClick = null;
+  }
 
   const rot = el.closest?.('[data-rotate="1"]');
   if (rot) {
@@ -367,11 +390,8 @@ function renderColorSwatches(current: string): void {
   }
 }
 
-canvas.addEventListener("dblclick", (e) => {
-  const el = e.target as Element;
-  const wrap = el.closest?.("[data-component-id]");
-  if (!wrap) return;
-  const id = wrap.getAttribute("data-component-id")!;
+/** 双击某元件：分流到颜色 / 数值单位 / 介绍对话框。 */
+function openComponentDialog(id: string): void {
   const item = getPlacedItem(id);
   if (!item) return;
   const entry = symbols.get(item.symbolId)?.entry;
@@ -387,7 +407,7 @@ canvas.addEventListener("dblclick", (e) => {
   } else if (entry.info) {
     openInfoDialog(entry.label, entry.info);
   }
-});
+}
 
 document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
   if (!dialogTargetId) return;
