@@ -26,12 +26,32 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
   const layout = createBreadboardLayout();
   const svg = parseSvg(breadboardSvgSource);
 
-  const { width, height } = BREADBOARD_ASSET.viewBox;
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.setAttribute("width", String(width));
-  svg.setAttribute("height", String(height));
+  // 移除 Inkscape 遗留的白色“页面”背景，避免其撑大内容包围盒。
+  svg.querySelector("#path1")?.remove();
+
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", layout.name);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  // 先挂到 DOM 上，getBBox 才能测量真实渲染内容。
+  container.appendChild(svg);
+
+  // 依据真实内容裁剪 viewBox，让面包板尽量占满画布、减少四周空白。
+  const content = svg.querySelector<SVGGElement>("#g1");
+  const bbox = content?.getBBox();
+  if (bbox && bbox.width > 0 && bbox.height > 0) {
+    const pad = 8;
+    const w = bbox.width + pad * 2;
+    const h = bbox.height + pad * 2;
+    svg.setAttribute("viewBox", `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
+    svg.setAttribute("width", w.toFixed(2));
+    svg.setAttribute("height", h.toFixed(2));
+  } else {
+    const { width, height } = BREADBOARD_ASSET.viewBox;
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", String(height));
+  }
 
   const layer = ensureOverlayLayer(svg, "breadboard-overlay");
 
@@ -70,7 +90,6 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
 
   layer.appendChild(holeGroup);
   layer.appendChild(hitGroup);
-  container.appendChild(svg);
 
   return {
     svg,

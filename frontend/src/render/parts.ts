@@ -15,18 +15,28 @@ export function loadComponentSymbols(): Map<string, BuiltSymbol> {
   return buildSymbols(partsSvg);
 }
 
-/** 测量一个（已归一化）符号的包围盒，用于面板缩放适配。 */
-function measureBBox(el: SVGGraphicsElement): { x: number; y: number; width: number; height: number } {
+/** 测量符号（含其归一化 translate）在最终坐标系中的包围盒。 */
+function measureSymbolViewBox(
+  template: SVGGElement,
+  pad = 3,
+): { x: number; y: number; width: number; height: number } {
   const host = document.createElementNS(SVG_NS, "svg");
   host.style.position = "absolute";
   host.style.visibility = "hidden";
-  host.setAttribute("width", "0");
-  host.setAttribute("height", "0");
-  host.appendChild(el);
+  host.setAttribute("width", "200");
+  host.setAttribute("height", "200");
+  host.appendChild(template.cloneNode(true));
   document.body.appendChild(host);
-  const bbox = el.getBBox();
+  // 外层 <svg> 的 getBBox 已包含 template 自身 translate 的位移，
+  // 得到的是归一化后（pin1 位于原点附近）的真实包围盒。
+  const bbox = host.getBBox();
   document.body.removeChild(host);
-  return bbox;
+  return {
+    x: bbox.x - pad,
+    y: bbox.y - pad,
+    width: bbox.width + pad * 2,
+    height: bbox.height + pad * 2,
+  };
 }
 
 /** 渲染元件面板到指定容器。 */
@@ -46,12 +56,8 @@ export function renderComponentPalette(
     item.title = "拖拽到面包板放置（拖拽中按 R 旋转）";
 
     const svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
-    const bbox = measureBBox(built.template);
-    const pad = 3;
-    svg.setAttribute(
-      "viewBox",
-      `${bbox.x - pad} ${bbox.y - pad} ${bbox.width + pad * 2} ${bbox.height + pad * 2}`,
-    );
+    const vb = measureSymbolViewBox(built.template);
+    svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.width} ${vb.height}`);
     svg.appendChild(built.template.cloneNode(true));
     item.appendChild(svg);
 

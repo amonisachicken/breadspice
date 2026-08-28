@@ -43,16 +43,16 @@ export interface CatalogEntry {
 /** 元件目录（顺序即面板显示顺序）。 */
 export const CATALOG: CatalogEntry[] = [
   {
-    id: "resistor",
-    kind: "resistor",
-    label: "电阻",
-    value: "1k",
-    prefix: "R",
+    id: "diode",
+    kind: "diode",
+    label: "二极管",
+    value: "1N4148",
+    prefix: "D",
     pathIds: ["path12", "path13", "path14", "path15"],
     origin: { x: 441.6, y: 239.04 },
     pins: [
-      { name: "1", x: 0, y: 0 },
-      { name: "2", x: 0, y: 76.8 },
+      { name: "a", x: 0, y: 0 },
+      { name: "k", x: 0, y: 76.8 },
     ],
   },
   {
@@ -82,16 +82,16 @@ export const CATALOG: CatalogEntry[] = [
     ],
   },
   {
-    id: "ecap",
-    kind: "capacitor",
-    label: "电解电容",
-    value: "100u",
-    prefix: "C",
+    id: "resistor",
+    kind: "resistor",
+    label: "电阻",
+    value: "1k",
+    prefix: "R",
     pathIds: ["path26", "path27"],
     origin: { x: 643.2, y: 239.04 },
     pins: [
-      { name: "+", x: 0, y: 0 },
-      { name: "-", x: 0, y: 76.8 },
+      { name: "1", x: 0, y: 0 },
+      { name: "2", x: 0, y: 76.8 },
     ],
   },
   {
