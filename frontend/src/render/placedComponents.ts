@@ -22,6 +22,8 @@ export interface PlacedRenderContext {
   layout: BreadboardLayout;
   symbols: Map<string, BuiltSymbol>;
   selectedId: string | null;
+  /** 预览模式：隐藏所有控制点/手柄，仅显示元件与引线。 */
+  preview?: boolean;
 }
 
 function makeCircle(cx: number, cy: number, r: number, fill: string): SVGCircleElement {
@@ -39,6 +41,7 @@ function renderWire(
   ins: ComponentInstance,
   selected: boolean,
   curve: boolean,
+  preview: boolean,
 ): void {
   const e0 = ins.pins[0];
   const e1 = ins.pins[1];
@@ -48,18 +51,20 @@ function renderWire(
   if (curve) {
     const c = ins.control ?? { x: (e0.x + e1.x) / 2, y: (e0.y + e1.y) / 2 };
 
-    // 控制点到两端点的辅助虚线（帮助理解曲率）
-    for (const p of [e0, e1]) {
-      const guide = document.createElementNS(SVG_NS, "line") as SVGLineElement;
-      guide.setAttribute("x1", p.x.toFixed(2));
-      guide.setAttribute("y1", p.y.toFixed(2));
-      guide.setAttribute("x2", c.x.toFixed(2));
-      guide.setAttribute("y2", c.y.toFixed(2));
-      guide.setAttribute("stroke", "#cbd5e1");
-      guide.setAttribute("stroke-width", "0.8");
-      guide.setAttribute("stroke-dasharray", "2 2");
-      guide.setAttribute("pointer-events", "none");
-      wrapper.appendChild(guide);
+    // 控制点到两端点的辅助虚线（预览模式下隐藏）
+    if (!preview) {
+      for (const p of [e0, e1]) {
+        const guide = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+        guide.setAttribute("x1", p.x.toFixed(2));
+        guide.setAttribute("y1", p.y.toFixed(2));
+        guide.setAttribute("x2", c.x.toFixed(2));
+        guide.setAttribute("y2", c.y.toFixed(2));
+        guide.setAttribute("stroke", "#cbd5e1");
+        guide.setAttribute("stroke-width", "0.8");
+        guide.setAttribute("stroke-dasharray", "2 2");
+        guide.setAttribute("pointer-events", "none");
+        wrapper.appendChild(guide);
+      }
     }
 
     const path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
@@ -69,17 +74,19 @@ function renderWire(
     path.setAttribute("stroke-width", "1.6");
     path.setAttribute("stroke-linecap", "round");
     path.setAttribute("pointer-events", "stroke");
-    path.style.cursor = "pointer";
+    path.style.cursor = preview ? "default" : "pointer";
     wrapper.appendChild(path);
 
     // 控制点手柄（蓝点）
-    const ch = makeCircle(c.x, c.y, 3, "#2563eb");
-    ch.setAttribute("stroke", "#fff");
-    ch.setAttribute("stroke-width", "0.7");
-    ch.dataset.componentId = ins.id;
-    ch.dataset.wireControl = "1";
-    ch.style.cursor = "crosshair";
-    wrapper.appendChild(ch);
+    if (!preview) {
+      const ch = makeCircle(c.x, c.y, 3, "#2563eb");
+      ch.setAttribute("stroke", "#fff");
+      ch.setAttribute("stroke-width", "0.7");
+      ch.dataset.componentId = ins.id;
+      ch.dataset.wireControl = "1";
+      ch.style.cursor = "crosshair";
+      wrapper.appendChild(ch);
+    }
   } else {
     const line = document.createElementNS(SVG_NS, "line") as SVGLineElement;
     line.setAttribute("x1", e0.x.toFixed(2));
@@ -90,25 +97,27 @@ function renderWire(
     line.setAttribute("stroke-width", "1.6");
     line.setAttribute("stroke-linecap", "round");
     line.setAttribute("pointer-events", "stroke");
-    line.style.cursor = "pointer";
+    line.style.cursor = preview ? "default" : "pointer";
     wrapper.appendChild(line);
   }
 
   // 端点手柄（绿）
-  [e0, e1].forEach((p, i) => {
-    const h = makeCircle(p.x, p.y, 2.6, "rgba(34,197,94,0.9)");
-    h.setAttribute("stroke", "#fff");
-    h.setAttribute("stroke-width", "0.6");
-    h.dataset.componentId = ins.id;
-    h.dataset.wireEndpoint = String(i);
-    h.style.cursor = "crosshair";
-    wrapper.appendChild(h);
-  });
+  if (!preview) {
+    [e0, e1].forEach((p, i) => {
+      const h = makeCircle(p.x, p.y, 2.6, "rgba(34,197,94,0.9)");
+      h.setAttribute("stroke", "#fff");
+      h.setAttribute("stroke-width", "0.6");
+      h.dataset.componentId = ins.id;
+      h.dataset.wireEndpoint = String(i);
+      h.style.cursor = "crosshair";
+      wrapper.appendChild(h);
+    });
+  }
 
   const midX = (e0.x + e1.x) / 2;
   const midY = (e0.y + e1.y) / 2;
 
-  if (selected) {
+  if (selected && !preview) {
     const ring = makeCircle(midX, midY, 6, "none");
     ring.setAttribute("stroke", "#2563eb");
     ring.setAttribute("stroke-width", "1");
@@ -153,7 +162,7 @@ export function renderPlacedComponents(
 
     // 导线：走专用渲染（直导线=直线，弯导线=贝塞尔曲线）
     if (ins.kind === "wire") {
-      renderWire(wrapper, ins, selected, Boolean(built.entry.curve));
+      renderWire(wrapper, ins, selected, Boolean(built.entry.curve), Boolean(ctx.preview));
       layer.appendChild(wrapper);
       continue;
     }
@@ -161,7 +170,7 @@ export function renderPlacedComponents(
     // 身体（局部坐标，由 translate/rotate 定位）
     const body = document.createElementNS(SVG_NS, "g") as SVGGElement;
     body.setAttribute("transform", `translate(${ins.x} ${ins.y}) rotate(${ins.rotation})`);
-    body.style.cursor = "grab";
+    body.style.cursor = ctx.preview ? "default" : "grab";
     body.appendChild(built.template.cloneNode(true));
     wrapper.appendChild(body);
 
@@ -215,7 +224,7 @@ export function renderPlacedComponents(
       handle.dataset.componentId = ins.id;
       handle.dataset.pinIndex = String(i);
       handle.style.cursor = "crosshair";
-      wrapper.appendChild(handle);
+      if (!ctx.preview) wrapper.appendChild(handle);
 
       // 引脚名标注：沿引线方向外移（离开身体）+ 垂直方向错开（避开引线本身）
       const along = 5;
@@ -235,8 +244,8 @@ export function renderPlacedComponents(
       wrapper.appendChild(pinLabel);
     }
 
-    // 选中：高亮圈 + 旋转手柄
-    if (selected) {
+    // 选中：高亮圈 + 旋转手柄（预览模式隐藏）
+    if (selected && !ctx.preview) {
       const ring = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
       ring.setAttribute("cx", ins.x.toFixed(2));
       ring.setAttribute("cy", ins.y.toFixed(2));

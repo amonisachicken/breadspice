@@ -49,6 +49,8 @@ app.innerHTML = `
   <header class="topbar">
     <h1>虚拟面包板 <span>Virtual Breadboard</span></h1>
     <div class="topbar__actions">
+      <button id="preview" type="button" class="toggle">预览</button>
+      <span class="topbar__sep"></span>
       <button id="undo" type="button" disabled>撤销</button>
       <button id="redo" type="button" disabled>重做</button>
       <button id="save" type="button">保存</button>
@@ -120,6 +122,7 @@ app.innerHTML = `
 
 const canvas = document.querySelector<HTMLElement>("#canvas")!;
 const paletteList = document.querySelector<HTMLElement>("#palette-list")!;
+const palette = document.querySelector<HTMLElement>(".palette")!;
 const statusbar = document.querySelector<HTMLElement>("#statusbar")!;
 const log = document.querySelector<HTMLPreElement>("#log")!;
 const zoomSlider = document.querySelector<HTMLInputElement>("#zoom-slider")!;
@@ -134,6 +137,8 @@ const importFileInput = document.querySelector<HTMLInputElement>("#import-file")
 const filenameInput = document.querySelector<HTMLInputElement>("#filename")!;
 const netlistPanel = document.querySelector<HTMLElement>("#netlist-panel")!;
 const netlistCollapseBtn = document.querySelector<HTMLButtonElement>("#netlist-collapse")!;
+const previewBtn = document.querySelector<HTMLButtonElement>("#preview")!;
+const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
 
 // —— 渲染面包板 ——
 const board = renderBreadboard(canvas);
@@ -146,16 +151,29 @@ renderComponentPalette(paletteList, symbols, dragCtx);
 
 // —— 放置状态与选中 ——
 let selectedId: string | null = null;
+let previewMode = false;
 // 双击检测（基于时间+屏幕位置，避免 DOM 重渲染导致原生 dblclick 失效）
 let lastClick: { id: string; time: number; x: number; y: number } | null = null;
 
 function render(): void {
-  renderPlacedComponents({ svg, layout, symbols, selectedId }, getPlaced());
+  renderPlacedComponents({ svg, layout, symbols, selectedId, preview: previewMode }, getPlaced());
 }
 
 function updateHistoryButtons(): void {
-  undoBtn.disabled = !canUndo();
-  redoBtn.disabled = !canRedo();
+  undoBtn.disabled = previewMode || !canUndo();
+  redoBtn.disabled = previewMode || !canRedo();
+}
+
+/** 预览模式：禁用编辑类控件，仅保留视图缩放与网表生成。 */
+function updatePreviewUI(): void {
+  previewBtn.classList.toggle("active", previewMode);
+  previewBtn.textContent = previewMode ? "退出预览" : "预览";
+  clearBtn.disabled = previewMode;
+  importBtn.disabled = previewMode;
+  filenameInput.disabled = previewMode;
+  canvas.classList.toggle("preview", previewMode);
+  palette.classList.toggle("preview", previewMode);
+  updateHistoryButtons();
 }
 
 // 后端单例（updateStatus 在 initProject 触发的首次 emit 中就会用到，需先初始化）
@@ -171,11 +189,17 @@ render();
 // —— 恢复上次会话（.breadcache 优先，否则 .bread）——
 initProject();
 filenameInput.value = getFilename();
-updateHistoryButtons();
+updatePreviewUI();
 
 // —— 已放置元件交互 + 画布平移（事件委托，统一挂在 canvas 上）——
 canvas.addEventListener("pointerdown", (e) => {
   const el = e.target as Element;
+
+  // 预览模式：不选中、不拖放，仅允许平移视图
+  if (previewMode) {
+    startCanvasPan(e);
+    return;
+  }
 
   // 先做双击检测：同一元件、时间与位置足够接近即视为双击
   const compEl = el.closest?.("[data-component-id]");
@@ -324,6 +348,7 @@ document.querySelector<HTMLButtonElement>("#zoom-fit")!.addEventListener("click"
 
 // Delete / Backspace 删除选中元件；R 旋转选中元件并重置引脚连接。
 window.addEventListener("keydown", (e) => {
+  if (previewMode) return; // 预览模式下禁用删除/旋转快捷键
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
     removePlaced(selectedId);
     selectedId = null;
@@ -510,7 +535,14 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// —— 撤销 / 重做 / 保存 / 下载 / 导入 ——
+// —— 预览 / 撤销 / 重做 / 保存 / 下载 / 导入 ——
+previewBtn.addEventListener("click", () => {
+  previewMode = !previewMode;
+  if (previewMode) selectedId = null;
+  updatePreviewUI();
+  render();
+});
+
 undoBtn.addEventListener("click", () => {
   selectedId = null;
   undo();

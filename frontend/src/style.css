@@ -361,3 +361,18 @@ button:disabled:hover {
 .log[hidden] {
   display: none;
 }
+
+button.toggle.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.palette.preview {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.canvas.preview {
+  cursor: grab;
+}
