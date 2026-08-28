@@ -57,7 +57,21 @@ body {
 
 .topbar__actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.zoom input[type="range"] {
+  width: 120px;
+  cursor: pointer;
 }
 
 button {
@@ -83,21 +97,15 @@ button:hover {
 .canvas {
   min-height: 0;
   overflow: auto;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .canvas svg {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+  margin: 16px auto;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .palette {

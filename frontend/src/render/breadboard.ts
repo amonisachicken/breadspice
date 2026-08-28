@@ -16,6 +16,9 @@ import { SVG_NS, ensureOverlayLayer, parseSvg } from "./svgAsset";
 export interface RenderedBreadboard {
   svg: SVGSVGElement;
   layout: BreadboardLayout;
+  /** 裁剪后的 viewBox 宽度（逻辑单位，用于缩放）。 */
+  baseWidth: number;
+  baseHeight: number;
   /** 显示/隐藏逻辑孔位可视化（调试用）。 */
   setHolesVisible(visible: boolean): void;
   /** 通过屏幕坐标命中一个孔位（供后续拖拽吸附使用）。 */
@@ -39,6 +42,8 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
   // 依据真实内容裁剪 viewBox，让面包板尽量占满画布、减少四周空白。
   const content = svg.querySelector<SVGGElement>("#g1");
   const bbox = content?.getBBox();
+  let baseWidth: number = BREADBOARD_ASSET.viewBox.width;
+  let baseHeight: number = BREADBOARD_ASSET.viewBox.height;
   if (bbox && bbox.width > 0 && bbox.height > 0) {
     const pad = 8;
     const w = bbox.width + pad * 2;
@@ -46,11 +51,12 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
     svg.setAttribute("viewBox", `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
     svg.setAttribute("width", w.toFixed(2));
     svg.setAttribute("height", h.toFixed(2));
+    baseWidth = w;
+    baseHeight = h;
   } else {
-    const { width, height } = BREADBOARD_ASSET.viewBox;
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    svg.setAttribute("width", String(width));
-    svg.setAttribute("height", String(height));
+    svg.setAttribute("viewBox", `0 0 ${baseWidth} ${baseHeight}`);
+    svg.setAttribute("width", String(baseWidth));
+    svg.setAttribute("height", String(baseHeight));
   }
 
   const layer = ensureOverlayLayer(svg, "breadboard-overlay");
@@ -94,6 +100,8 @@ export function renderBreadboard(container: HTMLElement): RenderedBreadboard {
   return {
     svg,
     layout,
+    baseWidth,
+    baseHeight,
     setHolesVisible(visible: boolean) {
       holeGroup.style.display = visible ? "" : "none";
     },

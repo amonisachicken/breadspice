@@ -56,10 +56,11 @@ export function renderPlacedComponents(
     body.style.cursor = "pointer";
     body.appendChild(built.template.cloneNode(true));
 
-    // 引线 + 引脚手柄
+    // 引线 + 引脚手柄（刚性引脚元件 length=0，跳过引线/手柄）
     for (let i = 0; i < built.entry.terminals.length; i++) {
       const term = built.entry.terminals[i];
       const pin = ins.pins[i];
+      if (term.length === 0) continue;
       const t = rotateOffset(term.x, term.y, ins.rotation);
       const from = { x: ins.x + t.x, y: ins.y + t.y };
 

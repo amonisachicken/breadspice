@@ -36,8 +36,10 @@ export interface CatalogEntry {
   bodyPathIds: string[];
   /** body 归一化参考点（viewBox 坐标，通常为身体中心）。 */
   bodyOrigin: { x: number; y: number };
-  /** 可伸缩引线端子。 */
+  /** 可伸缩引线端子（rigid 元件此处 length=0，表示固定引脚）。 */
   terminals: TerminalDef[];
+  /** 刚性引脚元件（如 DIP-8）：引脚不可伸缩，按固定偏移摆放。 */
+  rigid?: boolean;
 }
 
 /** 元件目录（顺序即面板显示顺序）。 */
@@ -114,18 +116,19 @@ export const CATALOG: CatalogEntry[] = [
     label: "IC (DIP-8)",
     value: "NE555",
     prefix: "U",
-    bodyPathIds: ["path10", "path11"],
+    bodyPathIds: ["path10", "path11", "path2", "path3", "path4", "path5", "path6", "path7", "path8", "path9"],
     bodyOrigin: { x: 379.2, y: 273.6 },
     terminals: [
-      { name: "1", x: -14.4, y: -14.4, dx: -1, dy: 0, length: 12 },
-      { name: "2", x: -14.4, y: -4.8, dx: -1, dy: 0, length: 12 },
-      { name: "3", x: -14.4, y: 4.8, dx: -1, dy: 0, length: 12 },
-      { name: "4", x: -14.4, y: 14.4, dx: -1, dy: 0, length: 12 },
-      { name: "5", x: 14.4, y: -14.4, dx: 1, dy: 0, length: 12 },
-      { name: "6", x: 14.4, y: -4.8, dx: 1, dy: 0, length: 12 },
-      { name: "7", x: 14.4, y: 4.8, dx: 1, dy: 0, length: 12 },
-      { name: "8", x: 14.4, y: 14.4, dx: 1, dy: 0, length: 12 },
+      { name: "1", x: -14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
+      { name: "2", x: -14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
+      { name: "3", x: -14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
+      { name: "4", x: -14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
+      { name: "5", x: 14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
+      { name: "6", x: 14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
+      { name: "7", x: 14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
+      { name: "8", x: 14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
     ],
+    rigid: true,
   },
 ];
 

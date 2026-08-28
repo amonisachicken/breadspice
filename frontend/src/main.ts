@@ -2,7 +2,7 @@
 
 /**
  * 应用入口 —— 虚拟面包板前端。
- * 当前：面包板绘制 + 元件拖拽放置（橡皮筋引脚 / 自由旋转）+ 接口预留。
+ * 面包板绘制 + 元件拖拽放置（橡皮筋引脚 / 自由旋转）+ 画布缩放 + 接口预留。
  */
 
 import { getBackend } from "./backend";
@@ -14,9 +14,9 @@ import {
   getPlaced,
   removePlaced,
   subscribe,
-  updatePlaced,
 } from "./store/circuitStore";
 import {
+  startBodyDrag,
   startPinDrag,
   startRotateDrag,
   type DragContext,
@@ -31,6 +31,11 @@ app.innerHTML = `
   <header class="topbar">
     <h1>虚拟面包板 <span>Virtual Breadboard</span></h1>
     <div class="topbar__actions">
+      <label class="zoom">缩放
+        <input id="zoom-slider" type="range" min="0.2" max="8" step="0.05" value="1" />
+        <span id="zoom-label">100%</span>
+      </label>
+      <button id="zoom-fit" type="button">适应</button>
       <button id="toggle-holes" type="button">显示孔位</button>
       <button id="test-backend" type="button">生成网表</button>
       <button id="clear" type="button">清空电路</button>
@@ -40,7 +45,7 @@ app.innerHTML = `
     <section class="canvas" id="canvas" aria-label="面包板画布"></section>
     <aside class="palette">
       <h2>元件库</h2>
-      <p class="palette__hint">拖入面包板；选中后拖蓝点旋转、拖绿点伸缩引脚、滚轮微调</p>
+      <p class="palette__hint">拖入面包板；拖元件可移动，拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放</p>
       <div class="palette__list" id="palette-list"></div>
     </aside>
   </main>
@@ -52,10 +57,12 @@ const canvas = document.querySelector<HTMLElement>("#canvas")!;
 const paletteList = document.querySelector<HTMLElement>("#palette-list")!;
 const statusbar = document.querySelector<HTMLElement>("#statusbar")!;
 const log = document.querySelector<HTMLPreElement>("#log")!;
+const zoomSlider = document.querySelector<HTMLInputElement>("#zoom-slider")!;
+const zoomLabel = document.querySelector<HTMLElement>("#zoom-label")!;
 
 // —— 渲染面包板 ——
 const board = renderBreadboard(canvas);
-const { layout, svg } = board;
+const { layout, svg, baseWidth, baseHeight } = board;
 
 // —— 元件符号 + 面板 ——
 const symbols = loadComponentSymbols();
@@ -75,44 +82,109 @@ subscribe(() => {
 });
 render();
 
-// —— 已放置元件的交互（事件委托）——
-svg.addEventListener("pointerdown", (e) => {
+// —— 已放置元件交互 + 画布平移（事件委托，统一挂在 canvas 上）——
+canvas.addEventListener("pointerdown", (e) => {
   const el = e.target as Element;
+
   const rot = el.closest?.('[data-rotate="1"]');
   if (rot) {
     const id = rot.getAttribute("data-component-id")!;
     e.preventDefault();
-    e.stopPropagation();
     startRotateDrag(dragCtx, id, e.clientX, e.clientY);
     return;
   }
+
   const pin = el.closest?.("[data-pin-index]");
   if (pin) {
     const id = pin.getAttribute("data-component-id")!;
     const idx = Number(pin.getAttribute("data-pin-index"));
     e.preventDefault();
-    e.stopPropagation();
     startPinDrag(dragCtx, id, idx, e.clientX, e.clientY);
+    return;
   }
-});
 
-svg.addEventListener("click", (e) => {
-  const el = e.target as Element;
-  if (el.closest?.('[data-rotate="1"]') || el.closest?.("[data-pin-index]")) return;
   const body = el.closest?.("[data-component-id]");
-  selectedId = body ? body.getAttribute("data-component-id") : null;
-  render();
+  if (body) {
+    const id = body.getAttribute("data-component-id")!;
+    e.preventDefault();
+    startBodyDrag(dragCtx, id, e.clientX, e.clientY, (moved) => {
+      if (!moved) {
+        selectedId = id;
+        render();
+      }
+    });
+    return;
+  }
+
+  // 空白区域：拖拽平移画布，点击取消选中
+  startCanvasPan(e);
 });
 
-// 滚轮微调选中元件的旋转角。
-svg.addEventListener("wheel", (e) => {
-  if (!selectedId) return;
-  const step = e.deltaY < 0 ? 5 : -5;
-  updatePlaced(selectedId, (ins) => {
-    ins.rotation = ((ins.rotation + step) % 360 + 360) % 360;
-  });
-  e.preventDefault();
+function startCanvasPan(e: PointerEvent): void {
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const sl = canvas.scrollLeft;
+  const st = canvas.scrollTop;
+  let moved = false;
+
+  const onMove = (ev: PointerEvent): void => {
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+    if (Math.hypot(dx, dy) > 2) moved = true;
+    canvas.scrollLeft = sl - dx;
+    canvas.scrollTop = st - dy;
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    if (!moved && selectedId) {
+      selectedId = null;
+      render();
+    }
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+// —— 画布缩放 ——
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 8;
+let zoom = 1;
+
+function applyZoom(): void {
+  svg.style.width = `${baseWidth * zoom}px`;
+  svg.style.height = `${baseHeight * zoom}px`;
+  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  zoomSlider.value = String(zoom);
+}
+
+function fitZoom(): void {
+  const cw = Math.max(60, canvas.clientWidth - 32);
+  const ch = Math.max(60, canvas.clientHeight - 32);
+  zoom = Math.min(cw / baseWidth, ch / baseHeight);
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+  applyZoom();
+}
+
+fitZoom();
+
+canvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+    applyZoom();
+  },
+  { passive: false },
+);
+
+zoomSlider.addEventListener("input", () => {
+  zoom = Number(zoomSlider.value);
+  applyZoom();
 });
+
+document.querySelector<HTMLButtonElement>("#zoom-fit")!.addEventListener("click", fitZoom);
 
 // Delete / Backspace 删除选中元件。
 window.addEventListener("keydown", (e) => {

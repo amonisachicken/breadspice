@@ -59,10 +59,25 @@ export function buildInstance(
   rotation: ComponentRotation,
   layout: BreadboardLayout,
 ): ComponentInstance {
+  let bx = x;
+  let by = y;
+
+  // 刚性引脚元件（如 DIP-8）：整体吸附，使 pin1 落在最近孔位，其余引脚保持固定偏移。
+  if (entry.rigid && entry.terminals.length > 0) {
+    const p1 = entry.terminals[0];
+    const r = rotateOffset(p1.x, p1.y, rotation);
+    const p1abs = { x: bx + r.x, y: by + r.y };
+    const hole = nearestNode(layout, p1abs.x, p1abs.y, 40);
+    if (hole) {
+      bx += hole.x - p1abs.x;
+      by += hole.y - p1abs.y;
+    }
+  }
+
   const pins = entry.terminals.map((t) => {
     const term = rotateOffset(t.x, t.y, rotation);
     const lead = rotateOffset(t.dx * t.length, t.dy * t.length, rotation);
-    const end = { x: x + term.x + lead.x, y: y + term.y + lead.y };
+    const end = { x: bx + term.x + lead.x, y: by + term.y + lead.y };
     const node = nearestNode(layout, end.x, end.y, 22);
     return { name: t.name, x: t.x, y: t.y, node: node?.id };
   });
@@ -73,8 +88,8 @@ export function buildInstance(
     refdes,
     value: entry.value,
     pins,
-    x,
-    y,
+    x: bx,
+    y: by,
     rotation,
   };
 }

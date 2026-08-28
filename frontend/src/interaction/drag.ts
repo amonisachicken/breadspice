@@ -19,7 +19,7 @@ import {
   nextRefdes,
   updatePlaced,
 } from "../store/circuitStore";
-import { buildInstance, nearestNode } from "./placement";
+import { buildInstance, nearestNode, rotateOffset } from "./placement";
 
 export interface DragContext {
   svg: SVGSVGElement;
@@ -140,6 +140,57 @@ export function startPinDrag(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+/** 2b. 拖拽元件身体：移动 (x, y)；若几乎没移动则视为点击（用于选中）。 */
+export function startBodyDrag(
+  ctx: DragContext,
+  componentId: string,
+  startClientX: number,
+  startClientY: number,
+  onDone: (moved: boolean) => void,
+): void {
+  const item = getPlacedItem(componentId);
+  if (!item) {
+    onDone(false);
+    return;
+  }
+  const entry = ctx.symbols.get(item.symbolId)?.entry;
+  const ins = item.instance;
+  const start = clientToViewBox(ctx.svg, startClientX, startClientY);
+  const baseX = ins.x;
+  const baseY = ins.y;
+  let moved = false;
+
+  const onMove = (e: PointerEvent): void => {
+    const p = clientToViewBox(ctx.svg, e.clientX, e.clientY);
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    if (Math.hypot(dx, dy) > 2) moved = true;
+    updatePlaced(componentId, (i) => {
+      i.x = baseX + dx;
+      i.y = baseY + dy;
+      // 刚性引脚元件移动后，引脚重新吸附到最近孔位。
+      if (entry?.rigid) {
+        i.pins.forEach((pin, idx) => {
+          const t = entry.terminals[idx];
+          const r = rotateOffset(t.x, t.y, i.rotation);
+          const node = nearestNode(ctx.layout, i.x + r.x, i.y + r.y, 22);
+          pin.node = node?.id;
+        });
+      }
+    });
+    e.preventDefault();
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    onDone(moved);
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
