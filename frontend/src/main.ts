@@ -118,6 +118,60 @@ app.innerHTML = `
       </div>
     </div>
   </div>
+  <div class="modal" id="sine-dialog" hidden>
+    <div class="modal__box">
+      <h3>正弦波发生器</h3>
+      <div class="modal__field"><label>频率 (Hz)</label><input id="sine-freq" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label>交流电压 (V)</label><input id="sine-ac" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label>直流电压 (V)</label><input id="sine-dc" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label>相位 (°)</label><input id="sine-phase" type="text" autocomplete="off" /></div>
+      <div class="modal__actions">
+        <button id="sine-cancel" type="button">取消</button>
+        <button id="sine-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="meter-dialog" hidden>
+    <div class="modal__box">
+      <h3 id="meter-title">电压表</h3>
+      <div class="meter-readout" id="meter-value">0.000 V</div>
+      <p class="meter-hint" id="meter-hint">（未运行仿真）</p>
+      <div class="modal__actions">
+        <button id="meter-close" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="scope-dialog" hidden>
+    <div class="modal__box modal__box--wide">
+      <h3>示波器</h3>
+      <div class="scope-screen">
+        <svg viewBox="0 0 300 180" preserveAspectRatio="none">
+          <rect width="300" height="180" fill="#0f172a" />
+          <g stroke="#1e293b" stroke-width="0.5">
+            <line x1="37.5" y1="0" x2="37.5" y2="180" />
+            <line x1="75" y1="0" x2="75" y2="180" />
+            <line x1="112.5" y1="0" x2="112.5" y2="180" />
+            <line x1="187.5" y1="0" x2="187.5" y2="180" />
+            <line x1="225" y1="0" x2="225" y2="180" />
+            <line x1="262.5" y1="0" x2="262.5" y2="180" />
+            <line x1="0" y1="22.5" x2="300" y2="22.5" />
+            <line x1="0" y1="45" x2="300" y2="45" />
+            <line x1="0" y1="67.5" x2="300" y2="67.5" />
+            <line x1="0" y1="112.5" x2="300" y2="112.5" />
+            <line x1="0" y1="135" x2="300" y2="135" />
+            <line x1="0" y1="157.5" x2="300" y2="157.5" />
+          </g>
+          <line x1="150" y1="0" x2="150" y2="180" stroke="#334155" stroke-width="0.8" />
+          <line x1="0" y1="90" x2="300" y2="90" stroke="#334155" stroke-width="0.8" />
+          <line x1="0" y1="90" x2="300" y2="90" stroke="#22c55e" stroke-width="1.5" />
+        </svg>
+        <span class="scope-hint">等待仿真</span>
+      </div>
+      <div class="modal__actions">
+        <button id="scope-close" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
 `;
 
 const canvas = document.querySelector<HTMLElement>("#canvas")!;
@@ -405,6 +459,20 @@ const colorInput = document.querySelector<HTMLInputElement>("#color-input")!;
 const colorSwatches = document.querySelector<HTMLElement>("#color-swatches")!;
 let colorTargetId: string | null = null;
 
+const sineDialog = document.querySelector<HTMLDivElement>("#sine-dialog")!;
+const sineFreq = document.querySelector<HTMLInputElement>("#sine-freq")!;
+const sineAc = document.querySelector<HTMLInputElement>("#sine-ac")!;
+const sineDc = document.querySelector<HTMLInputElement>("#sine-dc")!;
+const sinePhase = document.querySelector<HTMLInputElement>("#sine-phase")!;
+let sineTargetId: string | null = null;
+
+const meterDialog = document.querySelector<HTMLDivElement>("#meter-dialog")!;
+const meterTitle = document.querySelector<HTMLElement>("#meter-title")!;
+const meterValue = document.querySelector<HTMLElement>("#meter-value")!;
+const meterHint = document.querySelector<HTMLElement>("#meter-hint")!;
+
+const scopeDialog = document.querySelector<HTMLDivElement>("#scope-dialog")!;
+
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
   valueInput.value = value;
@@ -465,7 +533,7 @@ function renderColorSwatches(current: string): void {
   }
 }
 
-/** 双击某元件：分流到颜色 / 数值单位 / 介绍对话框。 */
+/** 双击某元件：分流到颜色 / 数值单位 / 正弦参数 / 仪表 / 示波器 / 介绍对话框。 */
 function openComponentDialog(id: string): void {
   const item = getPlacedItem(id);
   if (!item) return;
@@ -476,12 +544,66 @@ function openComponentDialog(id: string): void {
     openColorDialog(id, ins.color);
     return;
   }
+  if (ins.kind === "vsine") {
+    openSineDialog(id, ins.params ?? {});
+    return;
+  }
+  if (ins.kind === "voltmeter") {
+    openMeterDialog("电压表", "0.000 V", "读取两端电压差（10GΩ 采样），等待仿真");
+    return;
+  }
+  if (ins.kind === "ammeter") {
+    openMeterDialog("电流表", "0.000 A", "读取流经自身的电流（1Ω 采样），等待仿真");
+    return;
+  }
+  if (ins.kind === "oscilloscope") {
+    openScopeDialog();
+    return;
+  }
   const units = UNIT_SETS[ins.kind];
   if (units) {
     openValueDialog(id, ins.value, ins.unit, units);
   } else if (entry.info) {
     openInfoDialog(entry.label, entry.info);
   }
+}
+
+// —— 正弦波发生器参数对话框 ——
+function openSineDialog(id: string, params: Record<string, string>): void {
+  sineTargetId = id;
+  sineFreq.value = params.freq ?? "1k";
+  sineAc.value = params.ac ?? "1";
+  sineDc.value = params.dc ?? "0";
+  sinePhase.value = params.phase ?? "0";
+  sineDialog.hidden = false;
+  sineFreq.focus();
+  sineFreq.select();
+}
+
+function closeSineDialog(): void {
+  sineDialog.hidden = true;
+  sineTargetId = null;
+}
+
+// —— 电压表 / 电流表读数对话框 ——
+function openMeterDialog(title: string, value: string, hint: string): void {
+  meterTitle.textContent = title;
+  meterValue.textContent = value;
+  meterHint.textContent = hint;
+  meterDialog.hidden = false;
+}
+
+function closeMeterDialog(): void {
+  meterDialog.hidden = true;
+}
+
+// —— 示波器屏幕对话框 ——
+function openScopeDialog(): void {
+  scopeDialog.hidden = false;
+}
+
+function closeScopeDialog(): void {
+  scopeDialog.hidden = true;
 }
 
 document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
@@ -527,11 +649,52 @@ colorDialog.addEventListener("click", (e) => {
   if (e.target === colorDialog) closeColorDialog();
 });
 
+// —— 正弦波发生器对话框事件 ——
+document.querySelector<HTMLButtonElement>("#sine-ok")!.addEventListener("click", () => {
+  if (!sineTargetId) return;
+  commitUpdate(sineTargetId, (ins) => {
+    ins.params = {
+      freq: sineFreq.value.trim() || "1k",
+      ac: sineAc.value.trim() || "1",
+      dc: sineDc.value.trim() || "0",
+      phase: sinePhase.value.trim() || "0",
+    };
+  });
+  closeSineDialog();
+});
+
+document.querySelector<HTMLButtonElement>("#sine-cancel")!.addEventListener("click", closeSineDialog);
+
+for (const input of [sineFreq, sineAc, sineDc, sinePhase]) {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.querySelector<HTMLButtonElement>("#sine-ok")!.click();
+    if (e.key === "Escape") closeSineDialog();
+  });
+}
+
+sineDialog.addEventListener("click", (e) => {
+  if (e.target === sineDialog) closeSineDialog();
+});
+
+// —— 电压表 / 电流表 / 示波器对话框事件 ——
+document.querySelector<HTMLButtonElement>("#meter-close")!.addEventListener("click", closeMeterDialog);
+meterDialog.addEventListener("click", (e) => {
+  if (e.target === meterDialog) closeMeterDialog();
+});
+
+document.querySelector<HTMLButtonElement>("#scope-close")!.addEventListener("click", closeScopeDialog);
+scopeDialog.addEventListener("click", (e) => {
+  if (e.target === scopeDialog) closeScopeDialog();
+});
+
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeValueDialog();
     closeInfoDialog();
     closeColorDialog();
+    closeSineDialog();
+    closeMeterDialog();
+    closeScopeDialog();
   }
 });
 

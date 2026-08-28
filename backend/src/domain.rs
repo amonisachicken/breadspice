@@ -7,6 +7,7 @@
 //! 与 TypeScript 侧的 camelCase 命名保持一致。
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// 面包板插孔（tie point）的唯一稳定 id。
 pub type NodeId = String;
@@ -63,6 +64,10 @@ pub enum ComponentKind {
     Jumper,
     Wire,
     Power,
+    Vsine,
+    Voltmeter,
+    Ammeter,
+    Oscilloscope,
     Generic,
 }
 
@@ -110,6 +115,8 @@ pub struct ComponentInstance {
     pub control: Option<BendPoint>,
     /// 导线颜色（仅 kind=Wire 使用）。
     pub color: Option<String>,
+    /// 元件专属参数（如正弦源的 freq/ac/dc/phase）。
+    pub params: Option<HashMap<String, String>>,
 }
 
 /// 一个完整电路。

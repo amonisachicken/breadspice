@@ -56,6 +56,8 @@ export interface CatalogEntry {
   bodyFactory?: () => SVGGElement;
   /** 弯导线（kind="wire" 且 curve=true 时为平滑贝塞尔曲线）。 */
   curve?: boolean;
+  /** 元件默认参数（如正弦源的 freq/ac/dc/phase），放置时复制到实例。 */
+  params?: Record<string, string>;
 }
 
 const DIODE_TERMINALS: TerminalDef[] = [
@@ -102,6 +104,102 @@ function batteryBody(): SVGGElement {
   minus.setAttribute("fill", "#111827");
   minus.textContent = "−";
   g.appendChild(minus);
+
+  return g;
+}
+
+/** 程序化绘制正弦波发生器身体（圆 + 正弦曲线）。 */
+function sineSourceBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+
+  const circle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  circle.setAttribute("cx", "0");
+  circle.setAttribute("cy", "0");
+  circle.setAttribute("r", "9");
+  circle.setAttribute("fill", "#ffffff");
+  circle.setAttribute("stroke", "#111827");
+  circle.setAttribute("stroke-width", "1");
+  g.appendChild(circle);
+
+  const wave = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+  wave.setAttribute("d", "M -5 0 C -3.5 -5, -1.5 5, 0 0 C 1.5 -5, 3.5 5, 5 0");
+  wave.setAttribute("fill", "none");
+  wave.setAttribute("stroke", "#111827");
+  wave.setAttribute("stroke-width", "1");
+  g.appendChild(wave);
+
+  return g;
+}
+
+/** 程序化绘制电压表身体（圆 + V）。 */
+function voltmeterBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  const circle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  circle.setAttribute("cx", "0");
+  circle.setAttribute("cy", "0");
+  circle.setAttribute("r", "9");
+  circle.setAttribute("fill", "#ffffff");
+  circle.setAttribute("stroke", "#111827");
+  circle.setAttribute("stroke-width", "1");
+  g.appendChild(circle);
+
+  const v = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  v.setAttribute("x", "0");
+  v.setAttribute("y", "2.5");
+  v.setAttribute("text-anchor", "middle");
+  v.setAttribute("font-size", "7");
+  v.setAttribute("font-weight", "bold");
+  v.setAttribute("fill", "#2563eb");
+  v.textContent = "V";
+  g.appendChild(v);
+  return g;
+}
+
+/** 程序化绘制电流表身体（圆 + A）。 */
+function ammeterBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  const circle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  circle.setAttribute("cx", "0");
+  circle.setAttribute("cy", "0");
+  circle.setAttribute("r", "9");
+  circle.setAttribute("fill", "#ffffff");
+  circle.setAttribute("stroke", "#111827");
+  circle.setAttribute("stroke-width", "1");
+  g.appendChild(circle);
+
+  const a = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  a.setAttribute("x", "0");
+  a.setAttribute("y", "2.5");
+  a.setAttribute("text-anchor", "middle");
+  a.setAttribute("font-size", "7");
+  a.setAttribute("font-weight", "bold");
+  a.setAttribute("fill", "#dc2626");
+  a.textContent = "A";
+  g.appendChild(a);
+  return g;
+}
+
+/** 程序化绘制示波器身体（暗色屏幕 + 绿色迹线）。 */
+function oscilloscopeBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+
+  const screen = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  screen.setAttribute("x", "-11");
+  screen.setAttribute("y", "-8");
+  screen.setAttribute("width", "22");
+  screen.setAttribute("height", "16");
+  screen.setAttribute("rx", "2");
+  screen.setAttribute("fill", "#0f172a");
+  screen.setAttribute("stroke", "#111827");
+  screen.setAttribute("stroke-width", "1");
+  g.appendChild(screen);
+
+  const trace = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+  trace.setAttribute("d", "M -9 0 L -6 -1 L -3 1 L 0 -1 L 3 1 L 6 -1 L 9 0");
+  trace.setAttribute("fill", "none");
+  trace.setAttribute("stroke", "#22c55e");
+  trace.setAttribute("stroke-width", "1");
+  g.appendChild(trace);
 
   return g;
 }
@@ -346,6 +444,75 @@ export const CATALOG: CatalogEntry[] = [
     ],
     curve: true,
     info: "弯导线（平滑曲线）\n拖动两端点改接孔位，拖动蓝点调整曲率\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+  },
+
+  // —— 正弦波发生器（ngspice 正弦电压源）——
+  {
+    id: "vsine",
+    kind: "vsine",
+    label: "正弦波发生器",
+    value: "",
+    prefix: "S",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: sineSourceBody,
+    terminals: [
+      { name: "+", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
+      { name: "−", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
+    ],
+    params: { freq: "1k", ac: "1", dc: "0", phase: "0" },
+    info: "正弦波发生器\n双击设置频率/交流电压/直流电压/相位\n后端映射为 ngspice 正弦电压源（SIN）",
+  },
+
+  // —— 电压表（10GΩ 采样 + 读节点电压）——
+  {
+    id: "voltmeter",
+    kind: "voltmeter",
+    label: "电压表",
+    value: "",
+    prefix: "VM",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: voltmeterBody,
+    terminals: [
+      { name: "+", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
+      { name: "−", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
+    ],
+    info: "电压表\n双击显示两端电压差\n后端映射为大电阻（10000MΩ）+ 读节点电压",
+  },
+
+  // —— 电流表（1Ω 采样 + 读电流）——
+  {
+    id: "ammeter",
+    kind: "ammeter",
+    label: "电流表",
+    value: "",
+    prefix: "A",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: ammeterBody,
+    terminals: [
+      { name: "1", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
+      { name: "2", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
+    ],
+    info: "电流表\n双击显示流经自身的电流\n后端映射为小电阻（1Ω）+ 读元件电流",
+  },
+
+  // —— 示波器（读 raw 波形）——
+  {
+    id: "oscilloscope",
+    kind: "oscilloscope",
+    label: "示波器",
+    value: "",
+    prefix: "X",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: oscilloscopeBody,
+    terminals: [
+      { name: "tip", x: 0, y: -8, dx: 0, dy: -1, length: 27 },
+      { name: "gnd", x: 0, y: 8, dx: 0, dy: 1, length: 27 },
+    ],
+    info: "示波器\n双击打开示波器屏幕\n后端读取 ngspice raw 文件并绘制波形",
   },
 ];
 

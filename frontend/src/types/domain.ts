@@ -65,7 +65,11 @@ export type ComponentKind =
   | "opamp"
   | "jumper" // 跳线（纯导线）
   | "wire" // 自由导线
-  | "power" // 电源 / 地
+  | "power" // 直流电源 / 电池
+  | "vsine" // 正弦波发生器（ngspice 正弦电压源）
+  | "voltmeter" // 电压表（10GΩ 采样 + 读节点电压）
+  | "ammeter" // 电流表（1Ω 采样 + 读电流）
+  | "oscilloscope" // 示波器（读 raw 波形）
   | "generic";
 
 /**
@@ -108,6 +112,8 @@ export interface ComponentInstance {
   control?: { x: number; y: number };
   /** 导线颜色（CSS 颜色字符串）。仅 kind="wire" 使用。 */
   color?: string;
+  /** 元件专属参数（如正弦源的 freq/ac/dc/phase）。 */
+  params?: Record<string, string>;
 }
 
 /**

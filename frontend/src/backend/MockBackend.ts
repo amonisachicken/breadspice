@@ -44,6 +44,10 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   jumper: "R", // 跳线以近零电阻 R 近似
   wire: "R",
   power: "V",
+  vsine: "V", // 正弦波发生器 → 正弦电压源
+  voltmeter: "R", // 电压表 → 大电阻采样
+  ammeter: "R", // 电流表 → 小电阻采样
+  oscilloscope: "X", // 示波器 → 探针（读取 raw 波形）
   generic: "X",
 };
 
@@ -95,6 +99,23 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     if (comp.kind === "power") {
       // 理想直流源：V<name> <+> <-> <value>
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${spiceValue(comp.value, comp.unit)}`;
+    } else if (comp.kind === "vsine") {
+      // 正弦电压源：V<name> <+> <-> SIN(dc ac freq 0 0 phase)
+      const p = comp.params ?? {};
+      const dc = p.dc ?? "0";
+      const ac = p.ac ?? "1";
+      const freq = p.freq ?? "1k";
+      const phase = p.phase ?? "0";
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} SIN(${dc} ${ac} ${freq} 0 0 ${phase})`;
+    } else if (comp.kind === "voltmeter") {
+      // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 10000Meg`;
+    } else if (comp.kind === "ammeter") {
+      // 电流表：1Ω 采样电阻，后端读流经自身的电流
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 1`;
+    } else if (comp.kind === "oscilloscope") {
+      // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
+      line = `* probe ${comp.refdes}: V(${nodes[0] ?? "0"})`;
     } else if (comp.kind === "jumper" || comp.kind === "wire") {
       // 导线/跳线：近零电阻
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0.001`;
@@ -122,6 +143,10 @@ const STATIC_MODELS: ComponentModel[] = [
   { kind: "diode", label: "二极管", pins: pins(2) },
   { kind: "npn", label: "NPN 三极管", pins: pins(3) },
   { kind: "power", label: "电源/地", pins: pins(2) },
+  { kind: "vsine", label: "正弦波发生器", pins: pins(2) },
+  { kind: "voltmeter", label: "电压表", pins: pins(2) },
+  { kind: "ammeter", label: "电流表", pins: pins(2) },
+  { kind: "oscilloscope", label: "示波器", pins: pins(2) },
   { kind: "jumper", label: "跳线", pins: pins(2) },
   { kind: "wire", label: "导线", pins: pins(2) },
 ];

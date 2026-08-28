@@ -92,6 +92,7 @@ export function buildInstance(
     x: bx,
     y: by,
     rotation,
+    params: entry.params ? { ...entry.params } : undefined,
   };
 }
 
