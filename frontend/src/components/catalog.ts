@@ -495,7 +495,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "1", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
       { name: "2", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
     ],
-    info: "电流表\n双击显示流经自身的电流\n后端映射为小电阻（1Ω）+ 读元件电流",
+    info: "电流表\n双击显示流经自身的电流\n后端映射为小电阻（1mΩ）+ 读元件电流",
   },
 
   // —— 示波器（读 raw 波形）——

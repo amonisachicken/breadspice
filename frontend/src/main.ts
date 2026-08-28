@@ -47,8 +47,11 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 app.innerHTML = `
   <header class="topbar">
-    <h1>虚拟面包板 <span>Virtual Breadboard</span></h1>
+    <h1>面包板仿真 <span>BreadSpice</span></h1>
     <div class="topbar__actions">
+      <button id="simulate" type="button">▶️ 仿真</button>
+      <button id="sim-options" type="button">仿真选项</button>
+      <span class="topbar__sep"></span>
       <button id="preview" type="button" class="toggle">预览</button>
       <span class="topbar__sep"></span>
       <button id="undo" type="button" disabled>撤销</button>
@@ -553,7 +556,7 @@ function openComponentDialog(id: string): void {
     return;
   }
   if (ins.kind === "ammeter") {
-    openMeterDialog("电流表", "0.000 A", "读取流经自身的电流（1Ω 采样），等待仿真");
+    openMeterDialog("电流表", "0.000 A", "读取流经自身的电流（1mΩ 采样），等待仿真");
     return;
   }
   if (ins.kind === "oscilloscope") {
@@ -809,4 +812,13 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
   netlistCollapsed = false;
   log.hidden = false;
   netlistCollapseBtn.textContent = "收起";
+});
+
+// —— 仿真按钮（占位符，待接入 ngspice）——
+document.querySelector<HTMLButtonElement>("#simulate")!.addEventListener("click", () => {
+  setStatusMessage("（占位）仿真功能尚未接入 ngspice");
+});
+
+document.querySelector<HTMLButtonElement>("#sim-options")!.addEventListener("click", () => {
+  setStatusMessage("（占位）仿真选项尚未实现");
 });

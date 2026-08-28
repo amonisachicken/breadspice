@@ -111,8 +111,8 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 10000Meg`;
     } else if (comp.kind === "ammeter") {
-      // 电流表：1Ω 采样电阻，后端读流经自身的电流
-      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 1`;
+      // 电流表：1mΩ 采样电阻，后端读流经自身的电流
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 1m`;
     } else if (comp.kind === "oscilloscope") {
       // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
       line = `* probe ${comp.refdes}: V(${nodes[0] ?? "0"})`;

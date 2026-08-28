@@ -415,7 +415,7 @@ button.toggle.active {
 }
 
 .modal__box--wide {
-  width: 380px;
+  width: 600px;
 }
 
 .scope-screen {
@@ -429,7 +429,7 @@ button.toggle.active {
 .scope-screen svg {
   display: block;
   width: 100%;
-  height: 200px;
+  height: 400px;
 }
 
 .scope-hint {
