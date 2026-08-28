@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! 领域模型 —— 与前端 `frontend/src/types/domain.ts` 一一对应。
 //!
 //! 这些结构体是前端与后端的共享契约核心：前端用 JSON 发送 {@link Circuit}，

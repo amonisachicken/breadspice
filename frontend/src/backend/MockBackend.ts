@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * Mock 后端 —— 本地占位实现，用于在没有 Rust 后端时打通完整数据流。
  *

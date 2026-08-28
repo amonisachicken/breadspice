@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! 后端二进制入口（骨架）。
 //!
 //! 当前只打印启动信息并退出。后续在此启动 HTTP/WebSocket 服务，

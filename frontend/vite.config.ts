@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 import { defineConfig } from "vite";
 
 // 前端开发服务器。后续与 Rust 后端联调时，可在 server.proxy 里

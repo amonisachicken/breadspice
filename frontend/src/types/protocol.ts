@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 前端 <-> Rust 后端 通信协议类型。
  *

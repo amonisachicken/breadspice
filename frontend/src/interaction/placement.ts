@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 放置几何工具：旋转偏移、最近孔位查找、由目录项 + 锚点构造实例。
  */

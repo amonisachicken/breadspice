@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 应用入口 —— 虚拟面包板前端。
  * 当前：面包板绘制 + 元件拖拽放置 + 接口预留。

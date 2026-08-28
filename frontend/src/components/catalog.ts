@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 元件目录 —— 把 assets/parts.svg 拆成独立元件符号，并标注引脚。
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 后端解析器 —— 决定当前使用哪个 Backend 实现。
  *

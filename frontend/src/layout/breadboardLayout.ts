@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 面包板布局生成器 —— 与真实 SVG 资产（assets/breadboard.svg）对齐。
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! ngspice 接入占位。
 //!
 //! 后续实现两种策略（二选一或按需并存）：

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 面包板渲染器 —— 把 assets/breadboard.svg 内联到 DOM，并在其上叠加
  * “逻辑孔位”覆盖层（命中区 + 可选的可视孔点）。

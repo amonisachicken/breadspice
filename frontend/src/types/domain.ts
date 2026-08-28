@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 领域模型 —— 虚拟面包板的“物理世界”类型。
  *

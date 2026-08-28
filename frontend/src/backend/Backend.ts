@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 后端抽象接口 —— 前端唯一依赖的“仿真后端”契约。
  *

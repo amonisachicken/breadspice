@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 已放置元件渲染 —— 在面包板 SVG 上叠加放置的元件符号与引用名标注。
  */

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 元件拖拽 —— 从元件面板拖到面包板，吸附到最近孔位后放置。
  *

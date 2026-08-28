@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 元件面板 —— 从 parts.svg 构建元件符号，渲染成可拖拽的面板项。
  */

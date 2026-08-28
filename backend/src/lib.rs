@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! 虚拟面包板后端库。
 //!
 //! 模块划分：

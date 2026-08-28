@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! 网表生成（占位）。
 //!
 //! 最终实现：把 {@link Circuit}（元件 + 引脚所落孔位）展开为 ngspice 可执行的

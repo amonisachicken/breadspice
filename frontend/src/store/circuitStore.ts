@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 /**
  * 电路存储 —— 记录已放置到面包板上的元件实例。
  *
