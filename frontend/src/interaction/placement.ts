@@ -108,3 +108,36 @@ export function getRigidLockX(
   if (!colE || minX === Infinity) return null;
   return colE.x - minX;
 }
+
+/**
+ * 重新计算（重置）某个已放置元件的引脚连接：按「端子 + 默认引线向量」
+ * 重新吸附到最近孔位。旋转后调用，使引脚跟随新朝向。
+ */
+export function reSnapPins(
+  entry: CatalogEntry,
+  ins: ComponentInstance,
+  layout: BreadboardLayout,
+): void {
+  ins.pins = entry.terminals.map((t) => {
+    const term = rotateOffset(t.x, t.y, ins.rotation);
+    const lead = rotateOffset(t.dx * t.length, t.dy * t.length, ins.rotation);
+    const end = { x: ins.x + term.x + lead.x, y: ins.y + term.y + lead.y };
+    const node = nearestNode(layout, end.x, end.y, 22);
+    return { name: t.name, x: t.x, y: t.y, node: node?.id };
+  });
+}
+
+/** 刚性元件（DIP-8）在 x 已锁定到 e/f 列后，把 y 吸附到孔位行。 */
+export function snapRigidY(
+  layout: BreadboardLayout,
+  entry: CatalogEntry,
+  x: number,
+  y: number,
+  rotation: ComponentRotation,
+): number {
+  const p1 = entry.terminals[0];
+  const r1 = rotateOffset(p1.x, p1.y, rotation);
+  const target = { x: x + r1.x, y: y + r1.y };
+  const hole = nearestNode(layout, target.x, target.y, 40);
+  return hole ? hole.y - r1.y : y;
+}

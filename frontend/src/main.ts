@@ -12,8 +12,10 @@ import { renderPlacedComponents } from "./render/placedComponents";
 import {
   clearPlaced,
   getPlaced,
+  getPlacedItem,
   removePlaced,
   subscribe,
+  updatePlaced,
 } from "./store/circuitStore";
 import {
   startBodyDrag,
@@ -21,6 +23,7 @@ import {
   startRotateDrag,
   type DragContext,
 } from "./interaction/drag";
+import { reSnapPins } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
 
 import "./style.css";
@@ -186,12 +189,23 @@ zoomSlider.addEventListener("input", () => {
 
 document.querySelector<HTMLButtonElement>("#zoom-fit")!.addEventListener("click", fitZoom);
 
-// Delete / Backspace 删除选中元件。
+// Delete / Backspace 删除选中元件；R 旋转选中元件并重置引脚连接。
 window.addEventListener("keydown", (e) => {
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
     removePlaced(selectedId);
     selectedId = null;
     render();
+    return;
+  }
+  if ((e.key === "r" || e.key === "R") && selectedId) {
+    const item = getPlacedItem(selectedId);
+    const entry = item ? symbols.get(item.symbolId)?.entry : undefined;
+    if (item && entry && !entry.rigid) {
+      updatePlaced(selectedId, (ins) => {
+        ins.rotation = (ins.rotation + 90) % 360;
+        reSnapPins(entry, ins, layout);
+      });
+    }
   }
 });
 

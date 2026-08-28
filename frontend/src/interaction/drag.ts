@@ -20,7 +20,7 @@ import {
   nextRefdes,
   updatePlaced,
 } from "../store/circuitStore";
-import { buildInstance, getRigidLockX, nearestNode, rotateOffset } from "./placement";
+import { buildInstance, getRigidLockX, nearestNode, rotateOffset, snapRigidY } from "./placement";
 
 export interface DragContext {
   svg: SVGSVGElement;
@@ -174,15 +174,18 @@ export function startBodyDrag(
     const dy = p.y - start.y;
     if (Math.hypot(dx, dy) > 2) moved = true;
     updatePlaced(componentId, (i) => {
-      i.x = lockX !== null ? lockX : baseX + dx;
-      i.y = baseY + dy;
-      if (entry?.rigid) {
+      if (entry?.rigid && lockX !== null) {
+        i.x = lockX;
+        i.y = snapRigidY(ctx.layout, entry, lockX, baseY + dy, i.rotation);
         i.pins.forEach((pin, idx) => {
           const t = entry.terminals[idx];
           const r = rotateOffset(t.x, t.y, i.rotation);
           const node = nearestNode(ctx.layout, i.x + r.x, i.y + r.y, 22);
           pin.node = node?.id;
         });
+      } else {
+        i.x = baseX + dx;
+        i.y = baseY + dy;
       }
     });
     e.preventDefault();
