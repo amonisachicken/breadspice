@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 /**
- * 已放置元件渲染 —— 在面包板 SVG 上叠加放置的元件符号与引用名标注。
+ * 已放置元件渲染 —— 渲染刚性身体 + 橡皮筋引线 + 引脚/旋转手柄。
+ * 交互由 main.ts 里的“事件委托”统一处理，这里只负责绘制与数据属性标注。
  */
 
 import { SVG_NS } from "./svgAsset";
-import type { BreadboardLayout } from "../types/domain";
+import { rotateOffset } from "../interaction/placement";
+import type { BreadboardLayout, ComponentInstance } from "../types/domain";
 import type { BuiltSymbol } from "../components/catalog";
 import type { PlacedItem } from "../store/circuitStore";
 
@@ -18,10 +20,19 @@ export interface PlacedRenderContext {
   selectedId: string | null;
 }
 
+/** 计算某个引脚引线的默认端点（无 node 时的回退位置）。 */
+function defaultEnd(
+  ins: ComponentInstance,
+  terminal: { x: number; y: number; dx: number; dy: number; length: number },
+): { x: number; y: number } {
+  const t = rotateOffset(terminal.x, terminal.y, ins.rotation);
+  const lead = rotateOffset(terminal.dx * terminal.length, terminal.dy * terminal.length, ins.rotation);
+  return { x: ins.x + t.x + lead.x, y: ins.y + t.y + lead.y };
+}
+
 export function renderPlacedComponents(
   ctx: PlacedRenderContext,
   items: PlacedItem[],
-  onSelect: (id: string | null) => void,
 ): void {
   let layer = ctx.svg.querySelector<SVGGElement>(`#${PLACED_LAYER_ID}`);
   if (!layer) {
@@ -31,23 +42,54 @@ export function renderPlacedComponents(
   }
   layer.replaceChildren();
 
+  const nodeById = new Map(ctx.layout.nodes.map((n) => [n.id, n]));
+
   for (const item of items) {
-    const symbol = ctx.symbols.get(item.symbolId);
-    const anchor = ctx.layout.nodes.find((n) => n.id === item.instance.anchorNode);
-    if (!symbol || !anchor) continue;
+    const built = ctx.symbols.get(item.symbolId);
+    if (!built) continue;
+    const ins = item.instance;
+    const selected = ins.id === ctx.selectedId;
 
-    const selected = item.instance.id === ctx.selectedId;
+    const body = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    body.setAttribute("transform", `translate(${ins.x} ${ins.y}) rotate(${ins.rotation})`);
+    body.dataset.componentId = ins.id;
+    body.style.cursor = "pointer";
+    body.appendChild(built.template.cloneNode(true));
 
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("transform", `translate(${anchor.x} ${anchor.y}) rotate(${item.instance.rotation})`);
-    g.dataset.componentId = item.instance.id;
-    g.style.cursor = "pointer";
-    g.addEventListener("click", (e) => {
-      e.stopPropagation();
-      onSelect(item.instance.id);
-    });
+    // 引线 + 引脚手柄
+    for (let i = 0; i < built.entry.terminals.length; i++) {
+      const term = built.entry.terminals[i];
+      const pin = ins.pins[i];
+      const t = rotateOffset(term.x, term.y, ins.rotation);
+      const from = { x: ins.x + t.x, y: ins.y + t.y };
 
-    // 选中高亮：锚点处画一圈虚线。
+      const toNode = pin?.node ? nodeById.get(pin.node) : undefined;
+      const to = toNode ? { x: toNode.x, y: toNode.y } : defaultEnd(ins, term);
+
+      const lead = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+      lead.setAttribute("x1", from.x.toFixed(2));
+      lead.setAttribute("y1", from.y.toFixed(2));
+      lead.setAttribute("x2", to.x.toFixed(2));
+      lead.setAttribute("y2", to.y.toFixed(2));
+      lead.setAttribute("stroke", "#9aa0a6");
+      lead.setAttribute("stroke-width", "1.2");
+      lead.setAttribute("pointer-events", "none");
+      body.appendChild(lead);
+
+      const handle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+      handle.setAttribute("cx", to.x.toFixed(2));
+      handle.setAttribute("cy", to.y.toFixed(2));
+      handle.setAttribute("r", "2.6");
+      handle.setAttribute("fill", pin?.node ? "rgba(34,197,94,0.9)" : "rgba(234,88,12,0.9)");
+      handle.setAttribute("stroke", "#fff");
+      handle.setAttribute("stroke-width", "0.6");
+      handle.dataset.componentId = ins.id;
+      handle.dataset.pinIndex = String(i);
+      handle.style.cursor = "crosshair";
+      body.appendChild(handle);
+    }
+
+    // 选中：高亮 + 旋转手柄
     if (selected) {
       const ring = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
       ring.setAttribute("r", "5");
@@ -56,22 +98,32 @@ export function renderPlacedComponents(
       ring.setAttribute("stroke-width", "1");
       ring.setAttribute("stroke-dasharray", "2 2");
       ring.setAttribute("pointer-events", "none");
-      g.appendChild(ring);
+      body.appendChild(ring);
+
+      const rotHandle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+      rotHandle.setAttribute("cx", ins.x.toFixed(2));
+      rotHandle.setAttribute("cy", (ins.y - 24).toFixed(2));
+      rotHandle.setAttribute("r", "4");
+      rotHandle.setAttribute("fill", "#2563eb");
+      rotHandle.setAttribute("stroke", "#fff");
+      rotHandle.setAttribute("stroke-width", "0.8");
+      rotHandle.dataset.componentId = ins.id;
+      rotHandle.dataset.rotate = "1";
+      rotHandle.style.cursor = "grab";
+      body.appendChild(rotHandle);
     }
 
-    g.appendChild(symbol.template.cloneNode(true));
-
-    // 引用名标注（置于符号上方）。
+    // 引用名标注
     const label = document.createElementNS(SVG_NS, "text") as SVGTextElement;
     label.setAttribute("x", "0");
-    label.setAttribute("y", "-4");
-    label.setAttribute("font-size", "7");
+    label.setAttribute("y", "-6");
+    label.setAttribute("font-size", "6");
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("fill", selected ? "#b91c1c" : "#4b5563");
     label.setAttribute("pointer-events", "none");
-    label.textContent = item.instance.refdes;
-    g.appendChild(label);
+    label.textContent = ins.refdes;
+    body.appendChild(label);
 
-    layer.appendChild(g);
+    layer.appendChild(body);
   }
 }

@@ -37,6 +37,20 @@ export function removePlaced(id: string): void {
   }
 }
 
+/** 按 id 查找。 */
+export function getPlacedItem(id: string): PlacedItem | undefined {
+  return items.find((it) => it.instance.id === id);
+}
+
+/** 按 id 就地更新实例字段（移动身体、改引脚节点、旋转等）。 */
+export function updatePlaced(id: string, updater: (instance: ComponentInstance) => void): void {
+  const item = items.find((it) => it.instance.id === id);
+  if (item) {
+    updater(item.instance);
+    emit();
+  }
+}
+
 /** 清空整个电路。 */
 export function clearPlaced(): void {
   items.length = 0;

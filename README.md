@@ -15,11 +15,11 @@
 - ✅ 面包板 SVG 资产（`frontend/src/assets/breadboard.svg`）与元件库 SVG（`parts.svg`）已接入
 - ✅ 面包板布局生成器对齐真实 SVG 孔位（`frontend/src/layout/breadboardLayout.ts`）
 - ✅ 渲染器：内联 SVG + 叠加逻辑孔位命中层（`frontend/src/render/breadboard.ts`）
-- ✅ 元件拖拽：符号拆分 + 引脚标注 + 拖拽吸附 + R 旋转 + 放置存储
+- ✅ 元件拖拽：符号拆分（刚性身体 + 可伸缩引线）+ 拖拽放置 + 自由旋转 + 引脚伸缩
   （`src/components/catalog.ts`、`src/interaction/drag.ts`、`src/store/circuitStore.ts`）
 - ✅ 前后端共享契约（领域模型 + 后端接口 + 协议类型 + Mock 后端）
 - ✅ Rust 后端骨架（domain / netlist / ngspice 占位）
-- ⏳ 元件参数编辑 / 多引脚精确对齐细化
+- ⏳ 元件参数编辑
 - ⏳ ngspice 接入与真实仿真（后续）
 
 ## 目录结构
@@ -55,9 +55,12 @@ npm run typecheck  # 仅类型检查
 ```
 
 打开后可见：
-- 面包板 SVG 真实渲染；
-- 右侧「元件库」列出元件符号，**拖拽到面包板即可放置**（拖拽中按 `R` 键 90° 旋转，引脚自动吸附最近孔位）；
-- 点击已放置元件可选中（虚线高亮），按 `Delete` / `Backspace` 删除；
+- 面包板 SVG 真实渲染（已按内容裁剪，占满画布）；
+- 右侧「元件库」列出元件缩略图，**拖拽到面包板即可放置**（拖拽中按 `R` 键 90° 旋转，引脚自动吸附最近孔位）；
+- 点击已放置元件选中（虚线高亮）后：
+  - 拖 **蓝色圆点**（旋转手柄）任意角度旋转；**滚轮**微调角度；
+  - 拖 **绿色圆点**（引脚手柄）到任意孔位，伸缩引线；
+  - 按 `Delete` / `Backspace` 删除；
 - 顶部「显示孔位」叠加显示逻辑孔位（蓝色圆点，验证与 SVG 对齐）；
 - 顶部「生成网表」把当前放置的电路交给 `MockBackend`，打印元件目录与 SPICE 网表，验证接口链路；
 - 顶部「清空电路」重置。

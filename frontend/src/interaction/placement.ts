@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 /**
- * 放置几何工具：旋转偏移、最近孔位查找、由目录项 + 锚点构造实例。
+ * 放置几何工具：旋转偏移、最近孔位查找、由目录项构造实例。
  */
 
 import type {
@@ -12,22 +12,16 @@ import type {
 } from "../types/domain";
 import type { CatalogEntry } from "../components/catalog";
 
-/** 把一个相对偏移按角度旋转（围绕 pin1 原点）。 */
+/** 把相对偏移按任意角度旋转（围绕原点）。 */
 export function rotateOffset(
   dx: number,
   dy: number,
   deg: ComponentRotation,
 ): { x: number; y: number } {
-  switch (deg) {
-    case 0:
-      return { x: dx, y: dy };
-    case 90:
-      return { x: -dy, y: dx };
-    case 180:
-      return { x: -dx, y: -dy };
-    case 270:
-      return { x: dy, y: -dx };
-  }
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
 }
 
 /** 在 viewBox 坐标中查找最近的孔位（可选最大距离，返回 null 表示超出）。 */
@@ -53,26 +47,24 @@ export function nearestNode(
 }
 
 /**
- * 由目录项 + 锚点孔位 + 旋转角构造一个已放置的 {@link ComponentInstance}。
- * 每个引脚会根据旋转后的偏移吸附到最近的孔位，并把孔位所属节点写入 `pin.node`，
- * 这样电路可直接交给后端生成网表。
+ * 由目录项构造一个已放置实例：身体位于 (x, y)、旋转 rotation，
+ * 每个引脚的默认端点按「端子 + 默认引线向量」计算并吸附到最近孔位。
  */
 export function buildInstance(
   entry: CatalogEntry,
   id: string,
   refdes: string,
-  anchorNodeId: string,
+  x: number,
+  y: number,
   rotation: ComponentRotation,
   layout: BreadboardLayout,
 ): ComponentInstance {
-  const anchor = layout.nodes.find((n) => n.id === anchorNodeId);
-  if (!anchor) throw new Error(`锚点孔位不存在: ${anchorNodeId}`);
-
-  const pins = entry.pins.map((pin) => {
-    const r = rotateOffset(pin.x, pin.y, rotation);
-    const abs = { x: anchor.x + r.x, y: anchor.y + r.y };
-    const node = nearestNode(layout, abs.x, abs.y, 12); // 12 viewBox 单位内的孔位
-    return { name: pin.name, x: pin.x, y: pin.y, node: node?.id };
+  const pins = entry.terminals.map((t) => {
+    const term = rotateOffset(t.x, t.y, rotation);
+    const lead = rotateOffset(t.dx * t.length, t.dy * t.length, rotation);
+    const end = { x: x + term.x + lead.x, y: y + term.y + lead.y };
+    const node = nearestNode(layout, end.x, end.y, 22);
+    return { name: t.name, x: t.x, y: t.y, node: node?.id };
   });
 
   return {
@@ -81,7 +73,8 @@ export function buildInstance(
     refdes,
     value: entry.value,
     pins,
-    anchorNode: anchorNodeId,
+    x,
+    y,
     rotation,
   };
 }

@@ -70,22 +70,21 @@ export type ComponentKind =
 
 /**
  * 一个元件引脚：它是元件与面包板之间的电气连接点。
+ * 在“橡皮筋引脚”模型下，`x`/`y` 是引脚在元件身体上的**端子**位置
+ * （相对身体原点的偏移），`node` 是该引脚引线所连接的插孔。
  */
 export interface ComponentPin {
   /** 引脚名，例如 "anode"/"cathode"、"1"/"2"、"B"/"C"/"E"。 */
   name: string;
-  /** 该引脚在元件 SVG 坐标空间中的焊点位置（用于吸附到插孔）。 */
+  /** 引脚端子在元件身体局部坐标系中的位置（相对身体原点）。 */
   x: number;
   y: number;
-  /**
-   * ngspice 网表中该引脚对应的节点名。默认由布局推导；
-   * 若已放置，等于所落插孔所属 net 的节点名。
-   */
+  /** 该引脚引线所连接的插孔 id（= 布局中的节点）。 */
   node?: NodeId;
 }
 
-/** 元件的摆放姿态（用于适配不同朝向/镜像）。 */
-export type ComponentRotation = 0 | 90 | 180 | 270;
+/** 元件的旋转角（度，任意实数；0 为默认朝向）。 */
+export type ComponentRotation = number;
 
 /** 面包板上一个已放置的元件实例。 */
 export interface ComponentInstance {
@@ -96,10 +95,12 @@ export interface ComponentInstance {
   refdes: string;
   /** 元件参数值，例如 "1k"、"10uF"、"2N3904"。 */
   value: string;
-  /** 引脚定义（相对元件自身坐标）。 */
+  /** 引脚（端子 + 所连插孔）。 */
   pins: ComponentPin[];
-  /** 元件的摆放锚点：锚点引脚（pins[0]）所落插孔，及其旋转角。 */
-  anchorNode: NodeId;
+  /** 元件身体原点在面包板 viewBox 坐标中的位置。 */
+  x: number;
+  y: number;
+  /** 旋转角（度，任意实数）。 */
   rotation: ComponentRotation;
 }
 

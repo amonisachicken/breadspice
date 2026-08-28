@@ -71,16 +71,15 @@ pub enum ComponentKind {
 #[serde(rename_all = "camelCase")]
 pub struct ComponentPin {
     pub name: String,
-    /// 引脚在元件 SVG 坐标空间中的焊点位置。
+    /// 引脚端子在元件身体局部坐标系中的位置（相对身体原点）。
     pub x: f64,
     pub y: f64,
-    /// 放置后所落插孔所属节点（可选）。
+    /// 该引脚引线所连接的插孔 id（可选）。
     pub node: Option<NodeId>,
 }
 
-/// 元件摆放旋转角（度）。与前端 `ComponentRotation = 0 | 90 | 180 | 270` 对应，
-/// 用整数表示以保持 JSON 表示一致（避免 Rust 枚举序列化成字符串造成差异）。
-pub type ComponentRotation = u16;
+/// 元件旋转角（度，任意实数）。与前端 `ComponentRotation = number` 对应。
+pub type ComponentRotation = f64;
 
 /// 一个已放置的元件实例。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,8 +92,9 @@ pub struct ComponentInstance {
     /// 参数值，如 "1k"、"10uF"。
     pub value: String,
     pub pins: Vec<ComponentPin>,
-    /// 锚点引脚（pins[0]）所落插孔。
-    pub anchor_node: NodeId,
+    /// 元件身体原点在面包板 viewBox 坐标中的位置。
+    pub x: f64,
+    pub y: f64,
     pub rotation: ComponentRotation,
 }
 

@@ -2,7 +2,7 @@
 
 /**
  * 应用入口 —— 虚拟面包板前端。
- * 当前：面包板绘制 + 元件拖拽放置 + 接口预留。
+ * 当前：面包板绘制 + 元件拖拽放置（橡皮筋引脚 / 自由旋转）+ 接口预留。
  */
 
 import { getBackend } from "./backend";
@@ -14,8 +14,13 @@ import {
   getPlaced,
   removePlaced,
   subscribe,
+  updatePlaced,
 } from "./store/circuitStore";
-import type { DragContext } from "./interaction/drag";
+import {
+  startPinDrag,
+  startRotateDrag,
+  type DragContext,
+} from "./interaction/drag";
 import type { Circuit } from "./types/domain";
 
 import "./style.css";
@@ -35,7 +40,7 @@ app.innerHTML = `
     <section class="canvas" id="canvas" aria-label="面包板画布"></section>
     <aside class="palette">
       <h2>元件库</h2>
-      <p class="palette__hint">拖拽到面包板 · 拖拽中按 R 旋转</p>
+      <p class="palette__hint">拖入面包板；选中后拖蓝点旋转、拖绿点伸缩引脚、滚轮微调</p>
       <div class="palette__list" id="palette-list"></div>
     </aside>
   </main>
@@ -61,25 +66,52 @@ renderComponentPalette(paletteList, symbols, dragCtx);
 let selectedId: string | null = null;
 
 function render(): void {
-  renderPlacedComponents(
-    { svg, layout, symbols, selectedId },
-    getPlaced(),
-    (id) => {
-      selectedId = id;
-      render();
-    },
-  );
+  renderPlacedComponents({ svg, layout, symbols, selectedId }, getPlaced());
 }
 
-subscribe(render);
+subscribe(() => {
+  updateStatus();
+  render();
+});
 render();
 
-// 点击空白处取消选中。
-svg.addEventListener("click", () => {
-  if (selectedId) {
-    selectedId = null;
-    render();
+// —— 已放置元件的交互（事件委托）——
+svg.addEventListener("pointerdown", (e) => {
+  const el = e.target as Element;
+  const rot = el.closest?.('[data-rotate="1"]');
+  if (rot) {
+    const id = rot.getAttribute("data-component-id")!;
+    e.preventDefault();
+    e.stopPropagation();
+    startRotateDrag(dragCtx, id, e.clientX, e.clientY);
+    return;
   }
+  const pin = el.closest?.("[data-pin-index]");
+  if (pin) {
+    const id = pin.getAttribute("data-component-id")!;
+    const idx = Number(pin.getAttribute("data-pin-index"));
+    e.preventDefault();
+    e.stopPropagation();
+    startPinDrag(dragCtx, id, idx, e.clientX, e.clientY);
+  }
+});
+
+svg.addEventListener("click", (e) => {
+  const el = e.target as Element;
+  if (el.closest?.('[data-rotate="1"]') || el.closest?.("[data-pin-index]")) return;
+  const body = el.closest?.("[data-component-id]");
+  selectedId = body ? body.getAttribute("data-component-id") : null;
+  render();
+});
+
+// 滚轮微调选中元件的旋转角。
+svg.addEventListener("wheel", (e) => {
+  if (!selectedId) return;
+  const step = e.deltaY < 0 ? 5 : -5;
+  updatePlaced(selectedId, (ins) => {
+    ins.rotation = ((ins.rotation + step) % 360 + 360) % 360;
+  });
+  e.preventDefault();
 });
 
 // Delete / Backspace 删除选中元件。
@@ -99,10 +131,6 @@ function updateStatus(): void {
     `孔位 ${layout.nodes.length} · 网 ${layout.nets.length}`;
 }
 updateStatus();
-subscribe(() => {
-  updateStatus();
-  render();
-});
 
 // —— 显示/隐藏逻辑孔位 ——
 let holesVisible = false;
