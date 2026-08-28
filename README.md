@@ -6,6 +6,8 @@
 > 本项目使用了 [ngspice](https://github.com/ngspice/ngspice)（BSD-3-Clause）与
 > [DIY Layout Creator](https://github.com/bancika/diy-layout-creator)（GPL-3.0）的开源成果，
 > 相应声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+>
+> **许可证**：本项目采用 [GNU GPL v3.0](LICENSE)。
 
 ## 当前进度
 

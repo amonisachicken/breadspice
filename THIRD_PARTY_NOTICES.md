@@ -33,14 +33,16 @@ BSD-3-Clause 许可要点（详见 [`LICENSES/ngspice-COPYING.txt`](LICENSES/ngs
 - **项目**：DIY Layout Creator
 - **仓库**：<https://github.com/bancika/diy-layout-creator>
 - **许可证（SPDX）**：`GPL-3.0`
-  - 完整许可证文本见 [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt)。
+  - 完整许可证文本见 [`LICENSE`](LICENSE)。
 - **版权**：`Copyright (C) Bane Stojković (bancika) and contributors`
-- **本项目用途**：参考其面包板 / 元件布局相关的成果（元件符号绘制、洞洞板/面包板布局理念等）。
+- **本项目用途**：本项目直接使用了 DIYLC 的面包板与元件 SVG 资源（`frontend/src/assets/breadboard.svg`、`frontend/src/assets/parts.svg`），以及其面包板 / 元件布局相关的成果。
 
-> ⚠️ **GPL 提示**：GPL-3.0 是 copyleft 许可证。如果本项目直接引用、修改或以衍生作品形式分发 DIYLC 的代码或资源，那么本项目（作为整体）的分发也需遵循 GPL-3.0。当前本项目以“参考/借鉴其成果”为主，若后续直接纳入 DIYLC 的代码/资源，请相应调整本项目的整体许可证。
+> 由于直接使用了 DIYLC（GPL-3.0）的资源，本项目整体采用 GPL-3.0 许可证（见下文）。
 
 ---
 
-## 附：本项目自身许可证
+## 本项目自身许可证
 
-本项目（breadspice）尚未指定整体开源许可证。鉴于使用了 GPL-3.0 的 DIYLC 成果，后续正式发布前建议明确本项目许可证（如采用 GPL-3.0，或确认未直接纳入 GPL 代码后采用 BSD/MIT 等兼容许可证）。
+本项目 **breadspice** 采用 **GNU General Public License v3.0（GPL-3.0）** 许可证，完整文本见 [`LICENSE`](LICENSE)。
+
+Copyright (C) 2025 amonisachicken and contributors.
