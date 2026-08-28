@@ -21,9 +21,12 @@ import {
   startBodyDrag,
   startPinDrag,
   startRotateDrag,
+  startWireAddBend,
+  startWireBendDrag,
+  startWireEndpointDrag,
   type DragContext,
 } from "./interaction/drag";
-import { reSnapPins } from "./interaction/placement";
+import { reSnapPins, rotateWire } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
 
 import "./style.css";
@@ -48,7 +51,7 @@ app.innerHTML = `
     <section class="canvas" id="canvas" aria-label="面包板画布"></section>
     <aside class="palette">
       <h2>元件库</h2>
-      <p class="palette__hint">拖入面包板；拖元件移动、拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放，双击元件设置/查看属性</p>
+      <p class="palette__hint">拖入面包板；拖元件移动、拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放，双击蓝点设置/查看属性</p>
       <div class="palette__list" id="palette-list"></div>
     </aside>
   </main>
@@ -73,6 +76,17 @@ app.innerHTML = `
       <pre class="modal__info" id="info-body"></pre>
       <div class="modal__actions">
         <button id="info-close" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="color-dialog" hidden>
+    <div class="modal__box">
+      <h3>导线颜色</h3>
+      <div class="color-swatches" id="color-swatches"></div>
+      <input type="color" id="color-input" value="#2563eb" />
+      <div class="modal__actions">
+        <button id="color-cancel" type="button">取消</button>
+        <button id="color-ok" type="button">确定</button>
       </div>
     </div>
   </div>
@@ -116,6 +130,33 @@ canvas.addEventListener("pointerdown", (e) => {
     const id = rot.getAttribute("data-component-id")!;
     e.preventDefault();
     startRotateDrag(dragCtx, id, e.clientX, e.clientY);
+    return;
+  }
+
+  const bend = el.closest?.("[data-wire-bend]");
+  if (bend) {
+    const id = bend.getAttribute("data-component-id")!;
+    const idx = Number(bend.getAttribute("data-wire-bend"));
+    e.preventDefault();
+    startWireBendDrag(dragCtx, id, idx, e.clientX, e.clientY);
+    return;
+  }
+
+  const addBend = el.closest?.("[data-wire-add]");
+  if (addBend) {
+    const id = addBend.getAttribute("data-component-id")!;
+    const idx = Number(addBend.getAttribute("data-wire-add"));
+    e.preventDefault();
+    startWireAddBend(dragCtx, id, idx, e.clientX, e.clientY);
+    return;
+  }
+
+  const wireEnd = el.closest?.("[data-wire-endpoint]");
+  if (wireEnd) {
+    const id = wireEnd.getAttribute("data-component-id")!;
+    const idx = Number(wireEnd.getAttribute("data-wire-endpoint"));
+    e.preventDefault();
+    startWireEndpointDrag(dragCtx, id, idx, e.clientX, e.clientY);
     return;
   }
 
@@ -224,8 +265,12 @@ window.addEventListener("keydown", (e) => {
     const entry = item ? symbols.get(item.symbolId)?.entry : undefined;
     if (item && entry && !entry.rigid) {
       updatePlaced(selectedId, (ins) => {
-        ins.rotation = (ins.rotation + 90) % 360;
-        reSnapPins(entry, ins, layout);
+        if (ins.kind === "wire") {
+          rotateWire(ins, layout);
+        } else {
+          ins.rotation = (ins.rotation + 90) % 360;
+          reSnapPins(entry, ins, layout);
+        }
       });
     }
   }
@@ -240,11 +285,17 @@ function updateStatus(): void {
 }
 updateStatus();
 
-// —— 双击元件：设置数值+单位（电阻/电容），或查看介绍（半导体/IC）——
+// —— 双击元件：设置数值+单位（电阻/电容/电池）、设置颜色（导线），或查看介绍（半导体/IC）——
 const UNIT_SETS: Record<string, string[]> = {
   resistor: ["Ω", "kΩ", "MΩ"],
   capacitor: ["pF", "nF", "µF", "mF", "F"],
+  power: ["V", "mV"],
 };
+
+const WIRE_COLOR_PRESETS = [
+  "#dc2626", "#111827", "#2563eb", "#16a34a", "#eab308",
+  "#f97316", "#a855f7", "#ffffff", "#9ca3af", "#78350f",
+];
 
 const valueDialog = document.querySelector<HTMLDivElement>("#value-dialog")!;
 const valueInput = document.querySelector<HTMLInputElement>("#value-input")!;
@@ -254,6 +305,11 @@ let dialogTargetId: string | null = null;
 const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
 const infoTitle = document.querySelector<HTMLElement>("#info-dialog-title")!;
 const infoBody = document.querySelector<HTMLElement>("#info-body")!;
+
+const colorDialog = document.querySelector<HTMLDivElement>("#color-dialog")!;
+const colorInput = document.querySelector<HTMLInputElement>("#color-input")!;
+const colorSwatches = document.querySelector<HTMLElement>("#color-swatches")!;
+let colorTargetId: string | null = null;
 
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
@@ -287,6 +343,34 @@ function closeInfoDialog(): void {
   infoDialog.hidden = true;
 }
 
+function openColorDialog(id: string, color: string | undefined): void {
+  colorTargetId = id;
+  colorInput.value = color ?? "#2563eb";
+  renderColorSwatches(colorInput.value);
+  colorDialog.hidden = false;
+}
+
+function closeColorDialog(): void {
+  colorDialog.hidden = true;
+  colorTargetId = null;
+}
+
+function renderColorSwatches(current: string): void {
+  colorSwatches.replaceChildren();
+  for (const c of WIRE_COLOR_PRESETS) {
+    const s = document.createElement("button");
+    s.type = "button";
+    s.className = "color-swatch";
+    s.style.background = c;
+    if (c.toLowerCase() === current.toLowerCase()) s.classList.add("active");
+    s.addEventListener("click", () => {
+      colorInput.value = c;
+      renderColorSwatches(c);
+    });
+    colorSwatches.appendChild(s);
+  }
+}
+
 canvas.addEventListener("dblclick", (e) => {
   const el = e.target as Element;
   const wrap = el.closest?.("[data-component-id]");
@@ -296,9 +380,14 @@ canvas.addEventListener("dblclick", (e) => {
   if (!item) return;
   const entry = symbols.get(item.symbolId)?.entry;
   if (!entry) return;
-  const units = UNIT_SETS[item.instance.kind];
+  const ins = item.instance;
+  if (ins.kind === "wire") {
+    openColorDialog(id, ins.color);
+    return;
+  }
+  const units = UNIT_SETS[ins.kind];
   if (units) {
-    openValueDialog(id, item.instance.value, item.instance.unit, units);
+    openValueDialog(id, ins.value, ins.unit, units);
   } else if (entry.info) {
     openInfoDialog(entry.label, entry.info);
   }
@@ -331,10 +420,27 @@ infoDialog.addEventListener("click", (e) => {
   if (e.target === infoDialog) closeInfoDialog();
 });
 
+document.querySelector<HTMLButtonElement>("#color-ok")!.addEventListener("click", () => {
+  if (!colorTargetId) return;
+  updatePlaced(colorTargetId, (ins) => {
+    ins.color = colorInput.value;
+  });
+  closeColorDialog();
+});
+
+document.querySelector<HTMLButtonElement>("#color-cancel")!.addEventListener("click", closeColorDialog);
+
+colorInput.addEventListener("input", () => renderColorSwatches(colorInput.value));
+
+colorDialog.addEventListener("click", (e) => {
+  if (e.target === colorDialog) closeColorDialog();
+});
+
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeValueDialog();
     closeInfoDialog();
+    closeColorDialog();
   }
 });
 

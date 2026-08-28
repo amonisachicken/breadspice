@@ -142,3 +142,77 @@ export function snapRigidY(
   const hole = nearestNode(layout, target.x, target.y, 40);
   return hole ? hole.y - r1.y : y;
 }
+
+/**
+ * 构造导线实例：端点 1 吸附在 (x, y) 附近孔位，端点 2 默认向
+ * 右（或向下，vertical=true）延伸 36 单位后吸附最近孔位。
+ */
+export function buildWireInstance(
+  id: string,
+  refdes: string,
+  x: number,
+  y: number,
+  vertical: boolean,
+  color: string,
+  layout: BreadboardLayout,
+): ComponentInstance {
+  const h1 = nearestNode(layout, x, y, 40);
+  const s1 = { x: h1 ? h1.x : x, y: h1 ? h1.y : y };
+  const ex = vertical ? s1.x : s1.x + 36;
+  const ey = vertical ? s1.y + 36 : s1.y;
+  const h2 = nearestNode(layout, ex, ey, 40) ?? nearestNode(layout, ex, ey);
+  const s2 = { x: h2 ? h2.x : ex, y: h2 ? h2.y : ey };
+
+  return {
+    id,
+    kind: "wire",
+    refdes,
+    value: "",
+    pins: [
+      { name: "1", x: s1.x, y: s1.y, node: h1?.id },
+      { name: "2", x: s2.x, y: s2.y, node: h2?.id },
+    ],
+    x: (s1.x + s2.x) / 2,
+    y: (s1.y + s2.y) / 2,
+    rotation: 0,
+    bends: [],
+    color,
+  };
+}
+
+/** 把导线整体绕两端点中点旋转 90°（折点跟随），并重新吸附端点。 */
+export function rotateWire(ins: ComponentInstance, layout: BreadboardLayout): void {
+  const e0 = ins.pins[0];
+  const e1 = ins.pins[1];
+  if (!e0 || !e1) return;
+  const cx = (e0.x + e1.x) / 2;
+  const cy = (e0.y + e1.y) / 2;
+  const rot = (p: { x: number; y: number }): { x: number; y: number } => ({
+    x: cx - (p.y - cy),
+    y: cy + (p.x - cx),
+  });
+
+  const n0 = rot(e0);
+  const n1 = rot(e1);
+  e0.x = n0.x;
+  e0.y = n0.y;
+  e1.x = n1.x;
+  e1.y = n1.y;
+  const h0 = nearestNode(layout, e0.x, e0.y, 24);
+  const h1 = nearestNode(layout, e1.x, e1.y, 24);
+  if (h0) {
+    e0.x = h0.x;
+    e0.y = h0.y;
+    e0.node = h0.id;
+  }
+  if (h1) {
+    e1.x = h1.x;
+    e1.y = h1.y;
+    e1.node = h1.id;
+  }
+  for (const b of ins.bends ?? []) {
+    const nb = rot(b);
+    b.x = nb.x;
+    b.y = nb.y;
+  }
+}

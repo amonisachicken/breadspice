@@ -54,6 +54,7 @@ function spiceValue(value: string, unit?: string): string {
     "Ω": "", "kΩ": "k", "MΩ": "Meg", "GΩ": "G",
     "pF": "p", "nF": "n", "µF": "u", "uF": "u", "mF": "m", "F": "",
     "µH": "u", "uH": "u", "mH": "m", "H": "",
+    "V": "", "mV": "m",
   };
   return value + (suffix[unit] ?? unit);
 }
@@ -93,7 +94,7 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     let line: string;
     if (comp.kind === "power") {
       // 理想直流源：V<name> <+> <-> <value>
-      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${comp.value}`;
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${spiceValue(comp.value, comp.unit)}`;
     } else if (comp.kind === "jumper" || comp.kind === "wire") {
       // 导线/跳线：近零电阻
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0.001`;
@@ -122,6 +123,7 @@ const STATIC_MODELS: ComponentModel[] = [
   { kind: "npn", label: "NPN 三极管", pins: pins(3) },
   { kind: "power", label: "电源/地", pins: pins(2) },
   { kind: "jumper", label: "跳线", pins: pins(2) },
+  { kind: "wire", label: "导线", pins: pins(2) },
 ];
 
 function pins(count: number): { name: string; x: number; y: number }[] {

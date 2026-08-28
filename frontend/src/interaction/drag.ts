@@ -12,6 +12,7 @@
 
 import type { BreadboardLayout, ComponentRotation } from "../types/domain";
 import type { BuiltSymbol, CatalogEntry } from "../components/catalog";
+import { DEFAULT_WIRE_COLOR } from "../components/catalog";
 import { SVG_NS, clientToViewBox } from "../render/svgAsset";
 import {
   addPlaced,
@@ -20,7 +21,7 @@ import {
   nextRefdes,
   updatePlaced,
 } from "../store/circuitStore";
-import { buildInstance, getRigidLockX, nearestNode, rotateOffset, snapRigidY } from "./placement";
+import { buildInstance, buildWireInstance, getRigidLockX, nearestNode, rotateOffset, snapRigidY } from "./placement";
 
 export interface DragContext {
   svg: SVGSVGElement;
@@ -77,6 +78,11 @@ export function startComponentDrag(
   startClientX: number,
   startClientY: number,
 ): void {
+  if (entry.kind === "wire") {
+    startWireDrag(ctx, entry, startClientX, startClientY);
+    return;
+  }
+
   const symbol = ctx.symbols.get(entry.id);
   if (!symbol) return;
 
@@ -258,6 +264,191 @@ export function startRotateDrag(
     updatePlaced(componentId, (i) => {
       i.rotation = ((deg % 360) + 360) % 360;
     });
+    e.preventDefault();
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+/** 5. 从面板拖入导线（默认水平直线，R 切换垂直）。 */
+export function startWireDrag(
+  ctx: DragContext,
+  entry: CatalogEntry,
+  startClientX: number,
+  startClientY: number,
+): void {
+  const layer = ensureDragLayer(ctx.svg);
+  const ghost = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+  ghost.setAttribute("stroke", DEFAULT_WIRE_COLOR);
+  ghost.setAttribute("stroke-width", "1.6");
+  ghost.setAttribute("opacity", "0.85");
+  layer.appendChild(ghost);
+
+  let last = clientToViewBox(ctx.svg, startClientX, startClientY);
+  let vertical = false;
+
+  const apply = (): void => {
+    ghost.setAttribute("x1", last.x.toFixed(2));
+    ghost.setAttribute("y1", last.y.toFixed(2));
+    ghost.setAttribute("x2", (vertical ? last.x : last.x + 36).toFixed(2));
+    ghost.setAttribute("y2", (vertical ? last.y + 36 : last.y).toFixed(2));
+  };
+  apply();
+
+  const cleanup = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onCancel);
+    window.removeEventListener("keydown", onKey);
+    ghost.remove();
+  };
+
+  const onMove = (e: PointerEvent): void => {
+    last = clientToViewBox(ctx.svg, e.clientX, e.clientY);
+    apply();
+    e.preventDefault();
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === "r" || e.key === "R") {
+      vertical = !vertical;
+      apply();
+      e.preventDefault();
+    }
+  };
+  const onUp = (e: PointerEvent): void => {
+    cleanup();
+    const p = clientToViewBox(ctx.svg, e.clientX, e.clientY);
+    if (!nearestNode(ctx.layout, p.x, p.y, 40)) return;
+    const ins = buildWireInstance(
+      nextId(),
+      nextRefdes(entry.prefix),
+      p.x,
+      p.y,
+      vertical,
+      DEFAULT_WIRE_COLOR,
+      ctx.layout,
+    );
+    addPlaced(entry.id, ins);
+  };
+  const onCancel = (): void => cleanup();
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onCancel);
+  window.addEventListener("keydown", onKey);
+}
+
+/** 6. 拖拽导线端点：更新绝对坐标并吸附孔位。 */
+export function startWireEndpointDrag(
+  ctx: DragContext,
+  componentId: string,
+  endpointIndex: number,
+  startClientX: number,
+  startClientY: number,
+): void {
+  const move = (cx: number, cy: number): void => {
+    const p = clientToViewBox(ctx.svg, cx, cy);
+    const node = nearestNode(ctx.layout, p.x, p.y, 24);
+    updatePlaced(componentId, (ins) => {
+      const pin = ins.pins[endpointIndex];
+      if (!pin) return;
+      pin.x = node ? node.x : p.x;
+      pin.y = node ? node.y : p.y;
+      pin.node = node?.id;
+    });
+  };
+  move(startClientX, startClientY);
+
+  const onMove = (e: PointerEvent): void => {
+    move(e.clientX, e.clientY);
+    e.preventDefault();
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+/** 7. 拖拽导线折点（移动已存在的折点）。 */
+export function startWireBendDrag(
+  ctx: DragContext,
+  componentId: string,
+  bendIndex: number,
+  startClientX: number,
+  startClientY: number,
+): void {
+  const move = (cx: number, cy: number): void => {
+    const p = clientToViewBox(ctx.svg, cx, cy);
+    updatePlaced(componentId, (ins) => {
+      const b = ins.bends?.[bendIndex];
+      if (b) {
+        b.x = p.x;
+        b.y = p.y;
+      }
+    });
+  };
+  move(startClientX, startClientY);
+
+  const onMove = (e: PointerEvent): void => {
+    move(e.clientX, e.clientY);
+    e.preventDefault();
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+/** 8. 拖拽导线线段中点：在该处插入新折点并继续拖拽。 */
+export function startWireAddBend(
+  ctx: DragContext,
+  componentId: string,
+  segmentIndex: number,
+  startClientX: number,
+  startClientY: number,
+): void {
+  let inserted = false;
+
+  const move = (cx: number, cy: number): void => {
+    const p = clientToViewBox(ctx.svg, cx, cy);
+    updatePlaced(componentId, (ins) => {
+      const e0 = ins.pins[0];
+      const e1 = ins.pins[1];
+      if (!e0 || !e1) return;
+      const bends = ins.bends ?? (ins.bends = []);
+      if (!inserted) {
+        const pts = [e0, ...bends, e1];
+        const a = pts[segmentIndex];
+        const b = pts[segmentIndex + 1];
+        if (!a || !b) return;
+        bends.splice(segmentIndex, 0, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+        inserted = true;
+      }
+      const b = bends[segmentIndex];
+      if (b) {
+        b.x = p.x;
+        b.y = p.y;
+      }
+    });
+  };
+  move(startClientX, startClientY);
+
+  const onMove = (e: PointerEvent): void => {
+    move(e.clientX, e.clientY);
     e.preventDefault();
   };
   const onUp = (): void => {

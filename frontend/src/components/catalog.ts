@@ -13,6 +13,9 @@
 import type { ComponentKind } from "../types/domain";
 import { SVG_NS } from "../render/svgAsset";
 
+/** 导线默认颜色。 */
+export const DEFAULT_WIRE_COLOR = "#2563eb";
+
 /** 引线端子定义（相对 bodyOrigin 的偏移）。 */
 export interface TerminalDef {
   name: string;
@@ -49,6 +52,8 @@ export interface CatalogEntry {
   styleOverrides?: StyleOverrides;
   /** 双击元件时的介绍文本（半导体/IC 用，可含换行）。 */
   info?: string;
+  /** 程序化绘制身体（无 SVG 资产的元件，如电池）。 */
+  bodyFactory?: () => SVGGElement;
 }
 
 const DIODE_TERMINALS: TerminalDef[] = [
@@ -60,6 +65,44 @@ const LED_TERMINALS: TerminalDef[] = [
   { name: "a", x: 0, y: -10.8, dx: 0, dy: -1, length: 27 },
   { name: "k", x: 0, y: 10.8, dx: 0, dy: 1, length: 27 },
 ];
+
+/** 程序化绘制电池身体（局部坐标，原点为身体中心）。 */
+function batteryBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+
+  const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  rect.setAttribute("x", "-7");
+  rect.setAttribute("y", "-10");
+  rect.setAttribute("width", "14");
+  rect.setAttribute("height", "20");
+  rect.setAttribute("rx", "2");
+  rect.setAttribute("fill", "#f59e0b");
+  rect.setAttribute("stroke", "#b45309");
+  rect.setAttribute("stroke-width", "1");
+  g.appendChild(rect);
+
+  const plus = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  plus.setAttribute("x", "0");
+  plus.setAttribute("y", "-4");
+  plus.setAttribute("text-anchor", "middle");
+  plus.setAttribute("font-size", "6");
+  plus.setAttribute("font-weight", "bold");
+  plus.setAttribute("fill", "#111827");
+  plus.textContent = "+";
+  g.appendChild(plus);
+
+  const minus = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  minus.setAttribute("x", "0");
+  minus.setAttribute("y", "6");
+  minus.setAttribute("text-anchor", "middle");
+  minus.setAttribute("font-size", "6");
+  minus.setAttribute("font-weight", "bold");
+  minus.setAttribute("fill", "#111827");
+  minus.textContent = "−";
+  g.appendChild(minus);
+
+  return g;
+}
 
 /** 元件目录（顺序即面板显示顺序）。 */
 export const CATALOG: CatalogEntry[] = [
@@ -253,6 +296,40 @@ export const CATALOG: CatalogEntry[] = [
       "       └──────┘\n" +
       "1/5 OFFSET 调零，2 IN−，3 IN+，4 V−，6 OUT，7 V+，8 NC",
   },
+
+  // —— 电池（直流电压源，映射到 ngspice V 器件）——
+  {
+    id: "battery",
+    kind: "power",
+    label: "电池",
+    value: "9",
+    unit: "V",
+    prefix: "B",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: batteryBody,
+    terminals: [
+      { name: "+", x: 0, y: -10, dx: 0, dy: -1, length: 27 },
+      { name: "−", x: 0, y: 10, dx: 0, dy: 1, length: 27 },
+    ],
+    info: "电池 / 直流电压源\n双击蓝点设置电压\n后端映射为 ngspice 电压源（V 器件）",
+  },
+
+  // —— 导线（跳线，可弯曲）——
+  {
+    id: "wire",
+    kind: "wire",
+    label: "导线",
+    value: "",
+    prefix: "W",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    terminals: [
+      { name: "1", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
+      { name: "2", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
+    ],
+    info: "导线（跳线）\n拖动蓝点弯曲、拖动端点改接孔位\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+  },
 ];
 
 /** 已构建好的符号（归一化身体模板 + 目录元数据）。 */
@@ -269,18 +346,22 @@ export function buildSymbols(partsSvg: SVGSVGElement): Map<string, BuiltSymbol> 
     const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
     g.setAttribute("transform", `translate(${-entry.bodyOrigin.x} ${-entry.bodyOrigin.y})`);
     g.dataset.symbolId = entry.id;
-    for (const pid of entry.bodyPathIds) {
-      const el = partsSvg.querySelector(`#${pid}`);
-      if (!el) continue;
-      const clone = el.cloneNode(true) as SVGElement;
-      const ov = entry.styleOverrides?.[pid];
-      if (ov) {
-        // 源 SVG 的 fill/stroke 写在 style 属性里，优先级高于 presentation
-        // attribute，因此必须改写内联 style 才能生效。
-        if (ov.fill) clone.style.setProperty("fill", ov.fill);
-        if (ov.stroke) clone.style.setProperty("stroke", ov.stroke);
+    if (entry.bodyFactory) {
+      g.appendChild(entry.bodyFactory());
+    } else {
+      for (const pid of entry.bodyPathIds) {
+        const el = partsSvg.querySelector(`#${pid}`);
+        if (!el) continue;
+        const clone = el.cloneNode(true) as SVGElement;
+        const ov = entry.styleOverrides?.[pid];
+        if (ov) {
+          // 源 SVG 的 fill/stroke 写在 style 属性里，优先级高于 presentation
+          // attribute，因此必须改写内联 style 才能生效。
+          if (ov.fill) clone.style.setProperty("fill", ov.fill);
+          if (ov.stroke) clone.style.setProperty("stroke", ov.stroke);
+        }
+        g.appendChild(clone);
       }
-      g.appendChild(clone);
     }
     map.set(entry.id, { entry, template: g });
   }

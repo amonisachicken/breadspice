@@ -11,7 +11,7 @@
 
 import { SVG_NS } from "./svgAsset";
 import { rotateOffset } from "../interaction/placement";
-import type { BreadboardLayout } from "../types/domain";
+import type { BreadboardLayout, ComponentInstance } from "../types/domain";
 import type { BuiltSymbol } from "../components/catalog";
 import type { PlacedItem } from "../store/circuitStore";
 
@@ -22,6 +22,93 @@ export interface PlacedRenderContext {
   layout: BreadboardLayout;
   symbols: Map<string, BuiltSymbol>;
   selectedId: string | null;
+}
+
+function makeCircle(cx: number, cy: number, r: number, fill: string): SVGCircleElement {
+  const c = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  c.setAttribute("cx", cx.toFixed(2));
+  c.setAttribute("cy", cy.toFixed(2));
+  c.setAttribute("r", r.toFixed(2));
+  c.setAttribute("fill", fill);
+  return c;
+}
+
+/** 渲染导线：折线 + 端点/折点手柄 + 线段中点（新增折点）。 */
+function renderWire(wrapper: SVGGElement, ins: ComponentInstance, selected: boolean): void {
+  const e0 = ins.pins[0];
+  const e1 = ins.pins[1];
+  if (!e0 || !e1) return;
+  const color = ins.color ?? "#2563eb";
+  const bends = ins.bends ?? [];
+  const pts = [{ x: e0.x, y: e0.y }, ...bends, { x: e1.x, y: e1.y }];
+
+  const polyline = document.createElementNS(SVG_NS, "polyline") as SVGPolylineElement;
+  polyline.setAttribute("points", pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" "));
+  polyline.setAttribute("fill", "none");
+  polyline.setAttribute("stroke", color);
+  polyline.setAttribute("stroke-width", "1.6");
+  polyline.setAttribute("stroke-linejoin", "round");
+  polyline.setAttribute("stroke-linecap", "round");
+  polyline.setAttribute("pointer-events", "stroke");
+  polyline.style.cursor = "grab";
+  wrapper.appendChild(polyline);
+
+  // 端点手柄（绿）
+  [e0, e1].forEach((p, i) => {
+    const h = makeCircle(p.x, p.y, 2.6, "rgba(34,197,94,0.9)");
+    h.setAttribute("stroke", "#fff");
+    h.setAttribute("stroke-width", "0.6");
+    h.dataset.componentId = ins.id;
+    h.dataset.wireEndpoint = String(i);
+    h.style.cursor = "crosshair";
+    wrapper.appendChild(h);
+  });
+
+  // 折点手柄（蓝实心）
+  bends.forEach((b, i) => {
+    const h = makeCircle(b.x, b.y, 3, "#2563eb");
+    h.setAttribute("stroke", "#fff");
+    h.setAttribute("stroke-width", "0.7");
+    h.dataset.componentId = ins.id;
+    h.dataset.wireBend = String(i);
+    h.style.cursor = "crosshair";
+    wrapper.appendChild(h);
+  });
+
+  // 线段中点（蓝空心，拖出新增折点）
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const h = makeCircle((a.x + b.x) / 2, (a.y + b.y) / 2, 2.4, "rgba(255,255,255,0.7)");
+    h.setAttribute("stroke", "#2563eb");
+    h.setAttribute("stroke-width", "0.9");
+    h.dataset.componentId = ins.id;
+    h.dataset.wireAdd = String(i);
+    h.style.cursor = "crosshair";
+    wrapper.appendChild(h);
+  }
+
+  const midX = (e0.x + e1.x) / 2;
+  const midY = (e0.y + e1.y) / 2;
+
+  if (selected) {
+    const ring = makeCircle(midX, midY, 6, "none");
+    ring.setAttribute("stroke", "#2563eb");
+    ring.setAttribute("stroke-width", "1");
+    ring.setAttribute("stroke-dasharray", "2 2");
+    ring.setAttribute("pointer-events", "none");
+    wrapper.appendChild(ring);
+  }
+
+  const label = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  label.setAttribute("x", midX.toFixed(2));
+  label.setAttribute("y", (midY - 8).toFixed(2));
+  label.setAttribute("font-size", "6");
+  label.setAttribute("text-anchor", "middle");
+  label.setAttribute("fill", selected ? "#b91c1c" : "#4b5563");
+  label.setAttribute("pointer-events", "none");
+  label.textContent = ins.refdes;
+  wrapper.appendChild(label);
 }
 
 export function renderPlacedComponents(
@@ -47,6 +134,13 @@ export function renderPlacedComponents(
     const wrapper = document.createElementNS(SVG_NS, "g") as SVGGElement;
     wrapper.dataset.componentId = ins.id;
 
+    // 导线：走专用折线渲染（无身体、无旋转手柄）
+    if (ins.kind === "wire") {
+      renderWire(wrapper, ins, selected);
+      layer.appendChild(wrapper);
+      continue;
+    }
+
     // 身体（局部坐标，由 translate/rotate 定位）
     const body = document.createElementNS(SVG_NS, "g") as SVGGElement;
     body.setAttribute("transform", `translate(${ins.x} ${ins.y}) rotate(${ins.rotation})`);
@@ -54,11 +148,11 @@ export function renderPlacedComponents(
     body.appendChild(built.template.cloneNode(true));
     wrapper.appendChild(body);
 
-    // 电阻/电容：在身体上显示「数值 + 单位」
-    if (ins.kind === "resistor" || ins.kind === "capacitor") {
+    // 电阻/电容/电池：在身体上显示「数值 + 单位」
+    if (ins.kind === "resistor" || ins.kind === "capacitor" || ins.kind === "power") {
       const valueText = document.createElementNS(SVG_NS, "text") as SVGTextElement;
       valueText.setAttribute("x", "0");
-      valueText.setAttribute("y", "2");
+      valueText.setAttribute("y", ins.kind === "power" ? "1" : "2");
       valueText.setAttribute("font-size", "4.6");
       valueText.setAttribute("text-anchor", "middle");
       valueText.setAttribute("fill", "#111827");
