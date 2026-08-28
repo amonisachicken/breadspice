@@ -106,8 +106,13 @@ export function renderPlacedComponents(
       handle.style.cursor = "crosshair";
       wrapper.appendChild(handle);
 
-      // 引脚名标注（端子旁，朝身体内侧偏移，随元件旋转）
-      const namePos = rotateOffset(term.x - term.dx * 7, term.y - term.dy * 7, ins.rotation);
+      // 引脚名标注：沿引线方向外移（离开身体）+ 垂直方向错开（避开引线本身）
+      const along = 5;
+      const perp = 4;
+      const isVertical = term.dx === 0;
+      const px = isVertical ? perp : term.dx * along;
+      const py = isVertical ? term.dy * along : -perp;
+      const namePos = rotateOffset(term.x + px, term.y + py, ins.rotation);
       const pinLabel = document.createElementNS(SVG_NS, "text") as SVGTextElement;
       pinLabel.setAttribute("x", (ins.x + namePos.x).toFixed(2));
       pinLabel.setAttribute("y", (ins.y + namePos.y).toFixed(2));

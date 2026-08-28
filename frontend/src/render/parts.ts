@@ -53,7 +53,7 @@ export function renderComponentPalette(
 
     const item = document.createElement("div");
     item.className = "palette-item";
-    item.title = "拖拽到面包板放置（拖拽中按 R 旋转）";
+    item.title = "拖拽到面包板放置（拖拽中按 R 旋转）；放置后双击可查看/设置属性";
 
     const svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
     const vb = measureSymbolViewBox(built.template);

@@ -47,6 +47,8 @@ export interface CatalogEntry {
   rigid?: boolean;
   /** 克隆路径的样式覆盖（配色用）。 */
   styleOverrides?: StyleOverrides;
+  /** 双击元件时的介绍文本（半导体/IC 用，可含换行）。 */
+  info?: string;
 }
 
 const DIODE_TERMINALS: TerminalDef[] = [
@@ -72,6 +74,7 @@ export const CATALOG: CatalogEntry[] = [
     bodyOrigin: { x: 441.6, y: 278.4 },
     styleOverrides: { path13: { fill: "#1f2937" }, path14: { fill: "#ef4444" } },
     terminals: DIODE_TERMINALS,
+    info: "1N4148 硅开关二极管\n正向压降 VF ≈ 0.7 V\n引脚：a 阳极（+）、k 阴极（−，色环端）",
   },
   {
     id: "diode-1n5817",
@@ -83,6 +86,7 @@ export const CATALOG: CatalogEntry[] = [
     bodyOrigin: { x: 441.6, y: 278.4 },
     styleOverrides: { path13: { fill: "#1f2937" }, path14: { fill: "#3b82f6" } },
     terminals: DIODE_TERMINALS,
+    info: "1N5817 肖特基二极管\n正向压降 VF ≈ 0.3 V\n引脚：a 阳极（+）、k 阴极（−，色环端）",
   },
 
   // —— LED ×3 ——
@@ -96,6 +100,7 @@ export const CATALOG: CatalogEntry[] = [
     bodyOrigin: { x: 489.6, y: 278.2 },
     styleOverrides: { path17: { fill: "#ef4444" }, path18: { stroke: "#b91c1c" }, path19: { stroke: "#b91c1c" } },
     terminals: LED_TERMINALS,
+    info: "红色 LED 发光二极管\n正向压降 VF ≈ 1.8–2.2 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
   },
   {
     id: "led-green",
@@ -107,6 +112,7 @@ export const CATALOG: CatalogEntry[] = [
     bodyOrigin: { x: 489.6, y: 278.2 },
     styleOverrides: { path17: { fill: "#22c55e" }, path18: { stroke: "#16a34a" }, path19: { stroke: "#16a34a" } },
     terminals: LED_TERMINALS,
+    info: "绿色 LED 发光二极管\n正向压降 VF ≈ 2.0–3.0 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
   },
   {
     id: "led-blue",
@@ -118,6 +124,7 @@ export const CATALOG: CatalogEntry[] = [
     bodyOrigin: { x: 489.6, y: 278.2 },
     styleOverrides: { path17: { fill: "#3b82f6" }, path18: { stroke: "#1d4ed8" }, path19: { stroke: "#1d4ed8" } },
     terminals: LED_TERMINALS,
+    info: "蓝色 LED 发光二极管\n正向压降 VF ≈ 2.8–3.4 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
   },
 
   // —— 电容 / 电阻 ——
@@ -165,6 +172,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "B", x: 0, y: 0, dx: -1, dy: 0, length: 12 },
       { name: "E", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
+    info: "BC549C NPN 三极管\n极性：NPN（C 集电极流入、E 发射极流出）\n引脚（上→下）：C 集电极、B 基极、E 发射极",
   },
   {
     id: "pnp-bc559c",
@@ -180,6 +188,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "B", x: 0, y: 0, dx: -1, dy: 0, length: 12 },
       { name: "E", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
+    info: "BC559C PNP 三极管\n极性：PNP（E 发射极流入、C 集电极流出）\n引脚（上→下）：C 集电极、B 基极、E 发射极",
   },
   {
     id: "jfet-j201",
@@ -195,6 +204,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "G", x: 0, y: 0, dx: -1, dy: 0, length: 12 },
       { name: "S", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
+    info: "J201 N 沟道结型场效应管（JFET）\n引脚（上→下）：D 漏极、G 栅极、S 源极",
   },
   {
     id: "nmos-2n7000",
@@ -210,6 +220,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "G", x: 0, y: 0, dx: -1, dy: 0, length: 12 },
       { name: "S", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
+    info: "2N7000 N 沟道 MOSFET\n引脚（上→下）：D 漏极、G 栅极、S 源极",
   },
 
   // —— 运放 OP07（DIP-8，标准单运放引脚）——
@@ -232,6 +243,15 @@ export const CATALOG: CatalogEntry[] = [
       { name: "NC", x: 14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
     ],
     rigid: true,
+    info:
+      "OP07 精密运算放大器（DIP-8）\n" +
+      "       ┌──────┐\n" +
+      " OFFSET│1    8│NC\n" +
+      "   IN- │2    7│V+\n" +
+      "   IN+ │3    6│OUT\n" +
+      "    V- │4    5│OFFSET\n" +
+      "       └──────┘\n" +
+      "1/5 OFFSET 调零，2 IN−，3 IN+，4 V−，6 OUT，7 V+，8 NC",
   },
 ];
 
@@ -255,8 +275,10 @@ export function buildSymbols(partsSvg: SVGSVGElement): Map<string, BuiltSymbol> 
       const clone = el.cloneNode(true) as SVGElement;
       const ov = entry.styleOverrides?.[pid];
       if (ov) {
-        if (ov.fill) clone.setAttribute("fill", ov.fill);
-        if (ov.stroke) clone.setAttribute("stroke", ov.stroke);
+        // 源 SVG 的 fill/stroke 写在 style 属性里，优先级高于 presentation
+        // attribute，因此必须改写内联 style 才能生效。
+        if (ov.fill) clone.style.setProperty("fill", ov.fill);
+        if (ov.stroke) clone.style.setProperty("stroke", ov.stroke);
       }
       g.appendChild(clone);
     }

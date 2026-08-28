@@ -48,7 +48,7 @@ app.innerHTML = `
     <section class="canvas" id="canvas" aria-label="面包板画布"></section>
     <aside class="palette">
       <h2>元件库</h2>
-      <p class="palette__hint">拖入面包板；拖元件可移动，拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放</p>
+      <p class="palette__hint">拖入面包板；拖元件移动、拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放，双击元件设置/查看属性</p>
       <div class="palette__list" id="palette-list"></div>
     </aside>
   </main>
@@ -64,6 +64,15 @@ app.innerHTML = `
       <div class="modal__actions">
         <button id="value-cancel" type="button">取消</button>
         <button id="value-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="info-dialog" hidden>
+    <div class="modal__box">
+      <h3 id="info-dialog-title">元件信息</h3>
+      <pre class="modal__info" id="info-body"></pre>
+      <div class="modal__actions">
+        <button id="info-close" type="button">关闭</button>
       </div>
     </div>
   </div>
@@ -231,7 +240,7 @@ function updateStatus(): void {
 }
 updateStatus();
 
-// —— 双击元件：设置数值 + 单位（电阻/电容）——
+// —— 双击元件：设置数值+单位（电阻/电容），或查看介绍（半导体/IC）——
 const UNIT_SETS: Record<string, string[]> = {
   resistor: ["Ω", "kΩ", "MΩ"],
   capacitor: ["pF", "nF", "µF", "mF", "F"],
@@ -241,6 +250,10 @@ const valueDialog = document.querySelector<HTMLDivElement>("#value-dialog")!;
 const valueInput = document.querySelector<HTMLInputElement>("#value-input")!;
 const unitSelect = document.querySelector<HTMLSelectElement>("#unit-select")!;
 let dialogTargetId: string | null = null;
+
+const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
+const infoTitle = document.querySelector<HTMLElement>("#info-dialog-title")!;
+const infoBody = document.querySelector<HTMLElement>("#info-body")!;
 
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
@@ -264,6 +277,16 @@ function closeValueDialog(): void {
   dialogTargetId = null;
 }
 
+function openInfoDialog(title: string, text: string): void {
+  infoTitle.textContent = title;
+  infoBody.textContent = text;
+  infoDialog.hidden = false;
+}
+
+function closeInfoDialog(): void {
+  infoDialog.hidden = true;
+}
+
 canvas.addEventListener("dblclick", (e) => {
   const el = e.target as Element;
   const wrap = el.closest?.("[data-component-id]");
@@ -271,9 +294,14 @@ canvas.addEventListener("dblclick", (e) => {
   const id = wrap.getAttribute("data-component-id")!;
   const item = getPlacedItem(id);
   if (!item) return;
+  const entry = symbols.get(item.symbolId)?.entry;
+  if (!entry) return;
   const units = UNIT_SETS[item.instance.kind];
-  if (!units) return; // 只有电阻/电容支持数值对话框
-  openValueDialog(id, item.instance.value, item.instance.unit, units);
+  if (units) {
+    openValueDialog(id, item.instance.value, item.instance.unit, units);
+  } else if (entry.info) {
+    openInfoDialog(entry.label, entry.info);
+  }
 });
 
 document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
@@ -295,6 +323,19 @@ valueInput.addEventListener("keydown", (e) => {
 
 valueDialog.addEventListener("click", (e) => {
   if (e.target === valueDialog) closeValueDialog();
+});
+
+document.querySelector<HTMLButtonElement>("#info-close")!.addEventListener("click", closeInfoDialog);
+
+infoDialog.addEventListener("click", (e) => {
+  if (e.target === infoDialog) closeInfoDialog();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeValueDialog();
+    closeInfoDialog();
+  }
 });
 
 // —— 显示/隐藏逻辑孔位 ——

@@ -238,6 +238,17 @@ button:hover {
   background: #fff;
 }
 
+.modal__info {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
 .modal__actions {
   display: flex;
   justify-content: flex-end;
