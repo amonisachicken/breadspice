@@ -16,6 +16,8 @@ import { DEFAULT_WIRE_COLOR } from "../components/catalog";
 import { SVG_NS, clientToViewBox } from "../render/svgAsset";
 import {
   addPlaced,
+  beginMutation,
+  endMutation,
   getPlacedItem,
   nextId,
   nextRefdes,
@@ -164,6 +166,7 @@ export function startBodyDrag(
     onDone(false);
     return;
   }
+  beginMutation();
   const entry = ctx.symbols.get(item.symbolId)?.entry;
   const ins = item.instance;
   const lockX = entry ? getRigidLockX(ctx.layout, entry) : null;
@@ -201,6 +204,7 @@ export function startBodyDrag(
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
     setIcColumnHighlight(ctx, false);
+    endMutation();
     onDone(moved);
   };
   window.addEventListener("pointermove", onMove);
@@ -216,6 +220,7 @@ export function startPinDrag(
   startClientX: number,
   startClientY: number,
 ): void {
+  beginMutation();
   const move = (clientX: number, clientY: number): void => {
     const p = clientToViewBox(ctx.svg, clientX, clientY);
     const node = nearestNode(ctx.layout, p.x, p.y, 24);
@@ -234,6 +239,7 @@ export function startPinDrag(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    endMutation();
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
@@ -251,6 +257,7 @@ export function startRotateDrag(
   if (!item) return;
   const entry = ctx.symbols.get(item.symbolId)?.entry;
   if (entry?.rigid) return; // 刚性 IC 不可旋转
+  beginMutation();
 
   const ins = item.instance;
   const p0 = clientToViewBox(ctx.svg, startClientX, startClientY);
@@ -270,6 +277,7 @@ export function startRotateDrag(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    endMutation();
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
@@ -353,6 +361,7 @@ export function startWireEndpointDrag(
   startClientX: number,
   startClientY: number,
 ): void {
+  beginMutation();
   const move = (cx: number, cy: number): void => {
     const p = clientToViewBox(ctx.svg, cx, cy);
     const node = nearestNode(ctx.layout, p.x, p.y, 24);
@@ -374,6 +383,7 @@ export function startWireEndpointDrag(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    endMutation();
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
@@ -387,6 +397,7 @@ export function startWireControlDrag(
   startClientX: number,
   startClientY: number,
 ): void {
+  beginMutation();
   const move = (cx: number, cy: number): void => {
     const p = clientToViewBox(ctx.svg, cx, cy);
     updatePlaced(componentId, (ins) => {
@@ -406,6 +417,7 @@ export function startWireControlDrag(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    endMutation();
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);

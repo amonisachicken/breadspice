@@ -289,3 +289,75 @@ button:hover {
   background: #fff;
   cursor: pointer;
 }
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  border-color: var(--border);
+  color: inherit;
+}
+
+.topbar__actions {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.topbar__sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+#filename {
+  font: inherit;
+  font-size: 12px;
+  width: 90px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.netlist {
+  border-top: 1px solid var(--border);
+  background: #0f172a;
+  min-height: 0;
+}
+
+.netlist[hidden] {
+  display: none;
+}
+
+.netlist__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.netlist__title {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.netlist__header button {
+  font-size: 12px;
+  padding: 3px 10px;
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.netlist__header button:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.log[hidden] {
+  display: none;
+}

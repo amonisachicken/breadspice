@@ -10,13 +10,26 @@ import { renderBreadboard } from "./render/breadboard";
 import { loadComponentSymbols, renderComponentPalette } from "./render/parts";
 import { renderPlacedComponents } from "./render/placedComponents";
 import {
+  canRedo,
+  canUndo,
   clearPlaced,
+  commitUpdate,
   getPlaced,
   getPlacedItem,
+  onHistoryChange,
+  redo,
   removePlaced,
   subscribe,
-  updatePlaced,
+  undo,
 } from "./store/circuitStore";
+import {
+  downloadBread,
+  getFilename,
+  importBreadFile,
+  initProject,
+  saveProject,
+  setFilename,
+} from "./store/projectStore";
 import {
   startBodyDrag,
   startPinDrag,
@@ -36,6 +49,13 @@ app.innerHTML = `
   <header class="topbar">
     <h1>虚拟面包板 <span>Virtual Breadboard</span></h1>
     <div class="topbar__actions">
+      <button id="undo" type="button" disabled>撤销</button>
+      <button id="redo" type="button" disabled>重做</button>
+      <button id="save" type="button">保存</button>
+      <button id="download" type="button">下载</button>
+      <button id="import" type="button">导入</button>
+      <input id="filename" type="text" value="circuit" title="文件名（.bread）" />
+      <span class="topbar__sep"></span>
       <label class="zoom">缩放
         <input id="zoom-slider" type="range" min="0.2" max="8" step="0.05" value="1" />
         <span id="zoom-label">100%</span>
@@ -44,6 +64,7 @@ app.innerHTML = `
       <button id="toggle-holes" type="button">显示孔位</button>
       <button id="test-backend" type="button">生成网表</button>
       <button id="clear" type="button">清空电路</button>
+      <input id="import-file" type="file" accept=".bread" hidden />
     </div>
   </header>
   <main class="layout">
@@ -55,7 +76,13 @@ app.innerHTML = `
     </aside>
   </main>
   <footer class="statusbar" id="statusbar"></footer>
-  <pre class="log" id="log"></pre>
+  <section class="netlist" id="netlist-panel" hidden>
+    <header class="netlist__header">
+      <span class="netlist__title">网表</span>
+      <button id="netlist-collapse" type="button">收起</button>
+    </header>
+    <pre class="log" id="log"></pre>
+  </section>
   <div class="modal" id="value-dialog" hidden>
     <div class="modal__box">
       <h3 id="value-dialog-title">设置数值</h3>
@@ -98,6 +125,16 @@ const log = document.querySelector<HTMLPreElement>("#log")!;
 const zoomSlider = document.querySelector<HTMLInputElement>("#zoom-slider")!;
 const zoomLabel = document.querySelector<HTMLElement>("#zoom-label")!;
 
+const undoBtn = document.querySelector<HTMLButtonElement>("#undo")!;
+const redoBtn = document.querySelector<HTMLButtonElement>("#redo")!;
+const saveBtn = document.querySelector<HTMLButtonElement>("#save")!;
+const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
+const importBtn = document.querySelector<HTMLButtonElement>("#import")!;
+const importFileInput = document.querySelector<HTMLInputElement>("#import-file")!;
+const filenameInput = document.querySelector<HTMLInputElement>("#filename")!;
+const netlistPanel = document.querySelector<HTMLElement>("#netlist-panel")!;
+const netlistCollapseBtn = document.querySelector<HTMLButtonElement>("#netlist-collapse")!;
+
 // —— 渲染面包板 ——
 const board = renderBreadboard(canvas);
 const { layout, svg, baseWidth, baseHeight } = board;
@@ -116,11 +153,25 @@ function render(): void {
   renderPlacedComponents({ svg, layout, symbols, selectedId }, getPlaced());
 }
 
+function updateHistoryButtons(): void {
+  undoBtn.disabled = !canUndo();
+  redoBtn.disabled = !canRedo();
+}
+
+// 后端单例（updateStatus 在 initProject 触发的首次 emit 中就会用到，需先初始化）
+const backend = getBackend();
+
 subscribe(() => {
   updateStatus();
   render();
 });
+onHistoryChange(updateHistoryButtons);
 render();
+
+// —— 恢复上次会话（.breadcache 优先，否则 .bread）——
+initProject();
+filenameInput.value = getFilename();
+updateHistoryButtons();
 
 // —— 已放置元件交互 + 画布平移（事件委托，统一挂在 canvas 上）——
 canvas.addEventListener("pointerdown", (e) => {
@@ -283,7 +334,7 @@ window.addEventListener("keydown", (e) => {
     const item = getPlacedItem(selectedId);
     const entry = item ? symbols.get(item.symbolId)?.entry : undefined;
     if (item && entry && !entry.rigid) {
-      updatePlaced(selectedId, (ins) => {
+      commitUpdate(selectedId, (ins) => {
         if (ins.kind === "wire") {
           rotateWire(ins, layout);
         } else {
@@ -296,7 +347,6 @@ window.addEventListener("keydown", (e) => {
 });
 
 // —— 状态栏 ——
-const backend = getBackend();
 function updateStatus(): void {
   statusbar.textContent =
     `后端: ${backend.kind} · 已放置 ${getPlaced().length} 个元件 · ` +
@@ -412,7 +462,7 @@ function openComponentDialog(id: string): void {
 document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
   if (!dialogTargetId) return;
   const v = valueInput.value.trim();
-  updatePlaced(dialogTargetId, (ins) => {
+  commitUpdate(dialogTargetId, (ins) => {
     ins.value = v || "1";
     ins.unit = unitSelect.value;
   });
@@ -438,7 +488,7 @@ infoDialog.addEventListener("click", (e) => {
 
 document.querySelector<HTMLButtonElement>("#color-ok")!.addEventListener("click", () => {
   if (!colorTargetId) return;
-  updatePlaced(colorTargetId, (ins) => {
+  commitUpdate(colorTargetId, (ins) => {
     ins.color = colorInput.value;
   });
   closeColorDialog();
@@ -460,6 +510,64 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// —— 撤销 / 重做 / 保存 / 下载 / 导入 ——
+undoBtn.addEventListener("click", () => {
+  selectedId = null;
+  undo();
+});
+
+redoBtn.addEventListener("click", () => {
+  selectedId = null;
+  redo();
+});
+
+saveBtn.addEventListener("click", () => {
+  saveProject();
+  updateHistoryButtons();
+  setStatusMessage("已保存");
+});
+
+downloadBtn.addEventListener("click", () => {
+  downloadBread();
+});
+
+importBtn.addEventListener("click", () => importFileInput.click());
+
+importFileInput.addEventListener("change", async () => {
+  const file = importFileInput.files?.[0];
+  importFileInput.value = "";
+  if (!file) return;
+  try {
+    await importBreadFile(file);
+    selectedId = null;
+    filenameInput.value = getFilename();
+    render();
+    setStatusMessage(`已导入 ${file.name}`);
+  } catch (err) {
+    setStatusMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+  }
+});
+
+filenameInput.addEventListener("change", () => {
+  setFilename(filenameInput.value);
+  setStatusMessage(`文件名已设为 ${getFilename()}.bread`);
+});
+
+let statusMessageTimer: number | undefined;
+function setStatusMessage(msg: string): void {
+  statusbar.textContent = msg;
+  window.clearTimeout(statusMessageTimer);
+  statusMessageTimer = window.setTimeout(updateStatus, 2500);
+}
+
+// —— 网表面板收起/展开 ——
+let netlistCollapsed = false;
+netlistCollapseBtn.addEventListener("click", () => {
+  netlistCollapsed = !netlistCollapsed;
+  log.hidden = netlistCollapsed;
+  netlistCollapseBtn.textContent = netlistCollapsed ? "展开" : "收起";
+});
+
 // —— 显示/隐藏逻辑孔位 ——
 let holesVisible = false;
 document.querySelector<HTMLButtonElement>("#toggle-holes")!.addEventListener("click", () => {
@@ -473,6 +581,7 @@ document.querySelector<HTMLButtonElement>("#clear")!.addEventListener("click", (
   selectedId = null;
   render();
   log.textContent = "";
+  netlistPanel.hidden = true;
 });
 
 // —— 生成网表（把当前放置的电路交给 MockBackend，打通接口链路） ——
@@ -484,6 +593,10 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
 
   if (circuit.components.length === 0) {
     log.textContent = "（电路为空，请先拖入元件）";
+    netlistPanel.hidden = false;
+    netlistCollapsed = false;
+    log.hidden = false;
+    netlistCollapseBtn.textContent = "收起";
     return;
   }
 
@@ -497,4 +610,8 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
     `—— 当前电路网表（Mock 参考实现）——`,
     netlist.text,
   ].join("\n");
+  netlistPanel.hidden = false;
+  netlistCollapsed = false;
+  log.hidden = false;
+  netlistCollapseBtn.textContent = "收起";
 });
