@@ -1,0 +1,17 @@
+{
+  "name": "breadboard-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "虚拟面包板前端：SVG 渲染 + 拖拽布局，通过 Backend 接口对接 Rust/ngspice 后端",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  }
+}
