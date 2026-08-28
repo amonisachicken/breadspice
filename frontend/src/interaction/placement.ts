@@ -87,6 +87,7 @@ export function buildInstance(
     kind: entry.kind,
     refdes,
     value: entry.value,
+    unit: entry.unit,
     pins,
     x: bx,
     y: by,

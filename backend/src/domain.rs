@@ -91,6 +91,8 @@ pub struct ComponentInstance {
     pub refdes: String,
     /// 参数值，如 "1k"、"10uF"。
     pub value: String,
+    /// 单位（电阻/电容专用），如 "kΩ"、"µF"。
+    pub unit: Option<String>,
     pub pins: Vec<ComponentPin>,
     /// 元件身体原点在面包板 viewBox 坐标中的位置。
     pub x: f64,

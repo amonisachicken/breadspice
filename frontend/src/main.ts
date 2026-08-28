@@ -54,6 +54,19 @@ app.innerHTML = `
   </main>
   <footer class="statusbar" id="statusbar"></footer>
   <pre class="log" id="log"></pre>
+  <div class="modal" id="value-dialog" hidden>
+    <div class="modal__box">
+      <h3 id="value-dialog-title">设置数值</h3>
+      <div class="modal__row">
+        <input id="value-input" type="text" autocomplete="off" />
+        <select id="unit-select"></select>
+      </div>
+      <div class="modal__actions">
+        <button id="value-cancel" type="button">取消</button>
+        <button id="value-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
 `;
 
 const canvas = document.querySelector<HTMLElement>("#canvas")!;
@@ -217,6 +230,72 @@ function updateStatus(): void {
     `孔位 ${layout.nodes.length} · 网 ${layout.nets.length}`;
 }
 updateStatus();
+
+// —— 双击元件：设置数值 + 单位（电阻/电容）——
+const UNIT_SETS: Record<string, string[]> = {
+  resistor: ["Ω", "kΩ", "MΩ"],
+  capacitor: ["pF", "nF", "µF", "mF", "F"],
+};
+
+const valueDialog = document.querySelector<HTMLDivElement>("#value-dialog")!;
+const valueInput = document.querySelector<HTMLInputElement>("#value-input")!;
+const unitSelect = document.querySelector<HTMLSelectElement>("#unit-select")!;
+let dialogTargetId: string | null = null;
+
+function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
+  dialogTargetId = id;
+  valueInput.value = value;
+  unitSelect.replaceChildren(
+    ...units.map((u) => {
+      const o = document.createElement("option");
+      o.value = u;
+      o.textContent = u;
+      return o;
+    }),
+  );
+  unitSelect.value = unit && units.includes(unit) ? unit : units[0];
+  valueDialog.hidden = false;
+  valueInput.focus();
+  valueInput.select();
+}
+
+function closeValueDialog(): void {
+  valueDialog.hidden = true;
+  dialogTargetId = null;
+}
+
+canvas.addEventListener("dblclick", (e) => {
+  const el = e.target as Element;
+  const wrap = el.closest?.("[data-component-id]");
+  if (!wrap) return;
+  const id = wrap.getAttribute("data-component-id")!;
+  const item = getPlacedItem(id);
+  if (!item) return;
+  const units = UNIT_SETS[item.instance.kind];
+  if (!units) return; // 只有电阻/电容支持数值对话框
+  openValueDialog(id, item.instance.value, item.instance.unit, units);
+});
+
+document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
+  if (!dialogTargetId) return;
+  const v = valueInput.value.trim();
+  updatePlaced(dialogTargetId, (ins) => {
+    ins.value = v || "1";
+    ins.unit = unitSelect.value;
+  });
+  closeValueDialog();
+});
+
+document.querySelector<HTMLButtonElement>("#value-cancel")!.addEventListener("click", closeValueDialog);
+
+valueInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.querySelector<HTMLButtonElement>("#value-ok")!.click();
+  if (e.key === "Escape") closeValueDialog();
+});
+
+valueDialog.addEventListener("click", (e) => {
+  if (e.target === valueDialog) closeValueDialog();
+});
 
 // —— 显示/隐藏逻辑孔位 ——
 let holesVisible = false;

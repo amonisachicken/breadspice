@@ -47,6 +47,17 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   generic: "X",
 };
 
+/** 把「数值 + 单位」折叠成 SPICE 后缀表示（µ→u, kΩ→k, MΩ→Meg, Ω→""）。 */
+function spiceValue(value: string, unit?: string): string {
+  if (!unit) return value;
+  const suffix: Record<string, string> = {
+    "Ω": "", "kΩ": "k", "MΩ": "Meg", "GΩ": "G",
+    "pF": "p", "nF": "n", "µF": "u", "uF": "u", "mF": "m", "F": "",
+    "µH": "u", "uH": "u", "mH": "m", "H": "",
+  };
+  return value + (suffix[unit] ?? unit);
+}
+
 /**
  * 参考网表生成器（仅供 Mock 演示；生产环境由 Rust 后端实现）。
  * 根据每个元件的引脚落在哪个 net 上，展开为 SPICE 器件行。
@@ -87,7 +98,7 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       // 导线/跳线：近零电阻
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0.001`;
     } else if (nodes.length === 2) {
-      line = `${prefix}${comp.refdes} ${nodes[0]} ${nodes[1]} ${comp.value}`;
+      line = `${prefix}${comp.refdes} ${nodes[0]} ${nodes[1]} ${spiceValue(comp.value, comp.unit)}`;
     } else {
       // 三端及以上的器件，先退化为“器件名 + 全部节点 + 参数”。
       line = `${prefix}${comp.refdes} ${nodes.join(" ")} ${comp.value}`;

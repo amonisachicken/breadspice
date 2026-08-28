@@ -93,8 +93,10 @@ export interface ComponentInstance {
   kind: ComponentKind;
   /** 展示名，例如 "R1"、"C2"、"U1"。 */
   refdes: string;
-  /** 元件参数值，例如 "1k"、"10uF"、"2N3904"。 */
+  /** 元件参数值，例如 "1k"、"10uF"、"2N3904"（电阻/电容为数值，半导体/IC 为型号）。 */
   value: string;
+  /** 单位（电阻/电容专用），例如 "kΩ"、"µF"。 */
+  unit?: string;
   /** 引脚（端子 + 所连插孔）。 */
   pins: ComponentPin[];
   /** 元件身体原点在面包板 viewBox 坐标中的位置。 */

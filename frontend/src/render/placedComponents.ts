@@ -54,6 +54,19 @@ export function renderPlacedComponents(
     body.appendChild(built.template.cloneNode(true));
     wrapper.appendChild(body);
 
+    // 电阻/电容：在身体上显示「数值 + 单位」
+    if (ins.kind === "resistor" || ins.kind === "capacitor") {
+      const valueText = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+      valueText.setAttribute("x", "0");
+      valueText.setAttribute("y", "2");
+      valueText.setAttribute("font-size", "4.6");
+      valueText.setAttribute("text-anchor", "middle");
+      valueText.setAttribute("fill", "#111827");
+      valueText.setAttribute("pointer-events", "none");
+      valueText.textContent = `${ins.value}${ins.unit ?? ""}`;
+      body.appendChild(valueText);
+    }
+
     // 引线 + 引脚手柄（绝对坐标，与身体平级）
     for (let i = 0; i < built.entry.terminals.length; i++) {
       const term = built.entry.terminals[i];
@@ -92,6 +105,18 @@ export function renderPlacedComponents(
       handle.dataset.pinIndex = String(i);
       handle.style.cursor = "crosshair";
       wrapper.appendChild(handle);
+
+      // 引脚名标注（端子旁，朝身体内侧偏移，随元件旋转）
+      const namePos = rotateOffset(term.x - term.dx * 7, term.y - term.dy * 7, ins.rotation);
+      const pinLabel = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+      pinLabel.setAttribute("x", (ins.x + namePos.x).toFixed(2));
+      pinLabel.setAttribute("y", (ins.y + namePos.y).toFixed(2));
+      pinLabel.setAttribute("font-size", "4.2");
+      pinLabel.setAttribute("text-anchor", "middle");
+      pinLabel.setAttribute("fill", "#6b7280");
+      pinLabel.setAttribute("pointer-events", "none");
+      pinLabel.textContent = term.name;
+      wrapper.appendChild(pinLabel);
     }
 
     // 选中：高亮圈 + 旋转手柄
