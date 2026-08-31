@@ -115,13 +115,12 @@ pub fn analysis_line(analysis: AnalysisKind, params: &AnalysisParams) -> Result<
     }
 }
 
-/// 在网表末尾（`.end` 之前）注入分析行与 rawfile 输出控制块。
-fn build_batch_netlist(netlist_text: &str, analysis_line: &str, rawfile_name: &str) -> String {
+/// 在网表末尾（`.end` 之前）注入分析行。rawfile 由 `ngspice -r` 增量写出，
+/// `filetype=ascii` 通过工作目录下的 `.spiceinit` 设置。
+fn build_batch_netlist(netlist_text: &str, analysis_line: &str) -> String {
     let body = netlist_text.trim_end();
     let body = body.strip_suffix(".end").unwrap_or(body).trim_end();
-    format!(
-        "{body}\n{analysis_line}\n.control\nset filetype=ascii\nrun\nwrite {rawfile_name}\n.endc\n.end\n"
-    )
+    format!("{body}\n{analysis_line}\n.end\n")
 }
 
 /// 解析 ASCII rawfile（SPICE3 格式）。
@@ -154,7 +153,6 @@ fn parse_value(token: &str, flags: &str) -> Result<f64, String> {
 fn parse_rawfile(text: &str) -> Result<ParsedRaw, String> {
     let mut flags = String::new();
     let mut n_vars = 0usize;
-    let mut n_points = 0usize;
     let mut variables: Vec<String> = Vec::new();
     let mut values: Vec<f64> = Vec::new();
 
@@ -169,11 +167,6 @@ fn parse_rawfile(text: &str) -> Result<ParsedRaw, String> {
                         .trim()
                         .parse()
                         .map_err(|_| "No. Variables 解析失败".to_string())?;
-                } else if let Some(v) = line.strip_prefix("No. Points: ") {
-                    n_points = v
-                        .trim()
-                        .parse()
-                        .map_err(|_| "No. Points 解析失败".to_string())?;
                 } else if line.trim() == "Variables:" {
                     section = Section::Variables;
                 }
@@ -201,18 +194,15 @@ fn parse_rawfile(text: &str) -> Result<ParsedRaw, String> {
         }
     }
 
-    if n_vars == 0 || n_points == 0 {
-        return Err("rawfile 缺少 No. Variables / No. Points".to_string());
+    if n_vars == 0 {
+        return Err("rawfile 缺少 No. Variables".to_string());
     }
-    let expected = n_vars * n_points;
-    if values.len() < expected {
-        return Err(format!(
-            "rawfile 数值数量不足：读取 {}，期望 {}",
-            values.len(),
-            expected
-        ));
+    if values.len() < n_vars {
+        return Err(format!("rawfile 数值不足一个点：读取 {} 个值", values.len()));
     }
-
+    // 容忍被截断的 rawfile（-r 增量写出、被提前终止时 No. Points 可能为 0 或与实际不符）：
+    // 按完整点（每点 n_vars 个值）重塑，忽略尾部不完整的点。
+    let n_points = values.len() / n_vars;
     let points: Vec<Vec<f64>> = (0..n_points)
         .map(|p| values[p * n_vars..(p + 1) * n_vars].to_vec())
         .collect();
@@ -234,6 +224,7 @@ impl ParsedRaw {
             }
             SimulationResult {
                 ok: true,
+                cancelled: false,
                 error: None,
                 op: Some(op),
                 traces: None,
@@ -254,6 +245,7 @@ impl ParsedRaw {
             }
             SimulationResult {
                 ok: true,
+                cancelled: false,
                 error: None,
                 op: None,
                 traces: Some(traces),
@@ -275,11 +267,16 @@ impl Ngspice for CliNgspice {
         let workdir = std::env::temp_dir().join(format!("breadspice-{}-{}", std::process::id(), seq));
         std::fs::create_dir_all(&workdir).map_err(|e| format!("创建临时目录失败：{e}"))?;
 
-        let batch = build_batch_netlist(&netlist.text, &aline, "result.raw");
+        let batch = build_batch_netlist(&netlist.text, &aline);
         std::fs::write(workdir.join("circuit.cir"), batch).map_err(|e| format!("写网表失败：{e}"))?;
+        // 通过 .spiceinit 强制 ASCII rawfile（-r 增量写出）
+        std::fs::write(workdir.join(".spiceinit"), "set filetype=ascii\n")
+            .map_err(|e| format!("写 .spiceinit 失败：{e}"))?;
 
         let child = Command::new(&self.binary)
             .arg("-b")
+            .arg("-r")
+            .arg("result.raw")
             .arg("circuit.cir")
             .current_dir(&workdir)
             .stdout(Stdio::null())
@@ -303,11 +300,24 @@ impl Ngspice for CliNgspice {
         let _ = std::fs::remove_dir_all(&workdir);
 
         match parsed {
-            Ok(data) => Ok(data.into_simulation_result(analysis)),
-            Err(parse_err) => {
-                // 被信号终止（退出码为 None）→ 视为用户取消
+            Ok(data) => {
+                let mut result = data.into_simulation_result(analysis);
+                // 被信号终止（退出码为 None）→ 保留部分结果并标记取消
                 if output.status.code().is_none() {
-                    return Err("仿真已取消".to_string());
+                    result.cancelled = true;
+                }
+                Ok(result)
+            }
+            Err(parse_err) => {
+                // 被信号终止且无 rawfile 可解析 → 返回空结果并标记取消
+                if output.status.code().is_none() {
+                    return Ok(SimulationResult {
+                        ok: true,
+                        cancelled: true,
+                        error: None,
+                        op: None,
+                        traces: None,
+                    });
                 }
                 let mut msg = format!("ngspice 仿真失败：{parse_err}");
                 msg.push_str(&format!(
@@ -407,6 +417,29 @@ Values:
         assert_eq!(traces[0].x, vec![0.0, 1e-8]);
         assert_eq!(traces[0].y, vec![0.0, 6.283185303045417e-05]);
         assert_eq!(traces[1].name, "i(v1)");
+    }
+
+    #[test]
+    fn parses_truncated_rawfile() {
+        // -r 增量写出时被提前终止：头部 No. Points 为 0，Values 只有部分完整点
+        let raw = "\
+Title: t
+Plotname: Transient Analysis
+Flags: real
+No. Variables: 3
+No. Points: 0
+Variables:
+\t0\ttime\ttime
+\t1\tv(out)\tvoltage
+\t2\ti(v1)\tcurrent
+Values:
+ 0\t0.000000000000000e+00
+\t0.000000000000000e+00
+\t1.000000000000000e-03
+";
+        let parsed = parse_rawfile(raw).unwrap();
+        assert_eq!(parsed.points.len(), 1);
+        assert_eq!(parsed.points[0], vec![0.0, 0.0, 1e-3]);
     }
 
     #[test]

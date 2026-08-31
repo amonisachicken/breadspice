@@ -68,6 +68,8 @@ export interface Trace {
 export interface SimulationResult {
   /** 成功与否。 */
   ok: boolean;
+  /** 是否被用户提前取消（取消时仍可能带部分结果）。 */
+  cancelled?: boolean;
   /** 错误信息（失败时非空）。 */
   error?: string;
   /** 工作点（op 分析）结果：节点 -> 电压。 */

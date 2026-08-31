@@ -61,6 +61,9 @@ pub struct Trace {
 pub struct SimulationResult {
     /// 成功与否。
     pub ok: bool,
+    /// 是否被用户提前取消（取消时仍可能带部分结果）。
+    #[serde(default)]
+    pub cancelled: bool,
     /// 错误信息（失败时非空）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,

@@ -1109,7 +1109,11 @@ async function runSimulation(): Promise<void> {
       showSimResult(result);
       return;
     }
-    setStatusMessage("仿真完成");
+    if (result.cancelled) {
+      setStatusMessage("仿真已取消（保留部分结果）");
+    } else {
+      setStatusMessage("仿真完成");
+    }
     showSimResult(result);
   } catch (err) {
     setStatusMessage(`仿真出错：${err instanceof Error ? err.message : String(err)}`);
@@ -1121,6 +1125,9 @@ async function runSimulation(): Promise<void> {
 
 function showSimResult(result: SimulationResult): void {
   const lines: string[] = [`—— 仿真结果（${analysisKind}）——`];
+  if (result.cancelled) {
+    lines.push("（仿真已取消，以下为部分结果）");
+  }
   if (!result.ok) {
     lines.push("错误：" + (result.error ?? "未知错误"));
   }
