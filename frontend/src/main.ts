@@ -52,6 +52,7 @@ app.innerHTML = `
   <header class="topbar">
     <h1>面包板仿真 <span>BreadSpice</span></h1>
     <div class="topbar__actions">
+      <button id="test-backend" type="button">生成网表</button>
       <button id="simulate" type="button">▶️ 仿真</button>
       <button id="sim-options" type="button">仿真选项</button>
       <span class="topbar__sep"></span>
@@ -59,7 +60,7 @@ app.innerHTML = `
       <span class="topbar__sep"></span>
       <button id="undo" type="button" disabled>撤销</button>
       <button id="redo" type="button" disabled>重做</button>
-      <button id="save" type="button">保存</button>
+      <button id="save" type="button">保存布局</button>
       <button id="download" type="button">下载</button>
       <button id="import" type="button">导入</button>
       <input id="filename" type="text" value="circuit" title="文件名（.bread）" />
@@ -70,7 +71,6 @@ app.innerHTML = `
       </label>
       <button id="zoom-fit" type="button">适应</button>
       <button id="toggle-holes" type="button">显示孔位</button>
-      <button id="test-backend" type="button">生成网表</button>
       <button id="clear" type="button">清空电路</button>
       <input id="import-file" type="file" accept=".bread" hidden />
     </div>
@@ -602,11 +602,11 @@ let audioPlayer: HTMLAudioElement | null = null;
 
 /** 预设音符（名称 + 图标颜色）。 */
 const AUDIO_PRESETS = [
-  { name: "C", color: "#009400" },
-  { name: "A", color: "#FF0057" },
-  { name: "G", color: "#FF0057" },
+  { name: "C", color: "#FFE97F" },
+  { name: "A", color: "#FF005A" },
+  { name: "G", color: "#0094FF" },
   { name: "E", color: "#009400" },
-  { name: "D", color: "#009400" },
+  { name: "D", color: "#7FFFFF" },
 ];
 
 function playAudio(url: string): void {
