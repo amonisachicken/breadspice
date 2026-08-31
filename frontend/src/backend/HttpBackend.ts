@@ -56,6 +56,26 @@ export class HttpBackend implements Backend {
     throw new Error(`后端响应异常：${resp.kind}`);
   }
 
+  async uploadAudio(file: Blob): Promise<{ id: string; duration: number }> {
+    let resp: Response;
+    try {
+      resp = await fetch(`${this.apiUrl}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+    } catch (err) {
+      throw new Error(
+        `无法连接后端（${err instanceof Error ? err.message : String(err)}），请先在 backend 目录运行 cargo run`,
+      );
+    }
+    if (!resp.ok) {
+      const data = (await resp.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(`音频上传失败：${data?.error ?? `HTTP ${resp.status}`}`);
+    }
+    return (await resp.json()) as { id: string; duration: number };
+  }
+
   on<K extends BackendEventName>(
     event: K,
     handler: (payload: Extract<BackendEvent, { kind: K }>) => void,

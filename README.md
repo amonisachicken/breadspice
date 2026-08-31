@@ -16,7 +16,7 @@
 
 - ✅ 面包板 SVG 资产接入 + 布局生成器对齐真实孔位（`frontend/src/layout/breadboardLayout.ts`）
 - ✅ 元件库：电阻、电容、二极管 ×2、LED ×3、三极管 ×4、运放 OP07、电池（DC 源）、
-  正弦波发生器、电压表、电流表、示波器、直导线、弯导线、接地/GND（`frontend/src/components/catalog.ts`）
+  正弦波发生器、音频输入、电压表、电流表、示波器、直导线、弯导线、接地/GND（`frontend/src/components/catalog.ts`）
 - ✅ 拖拽放置 + 自由旋转（蓝点）+ `R` 键 90° 旋转 + 引脚伸缩（绿点，吸附孔位）+ IC 刚性锁定 e/f 列
 - ✅ 导线：直导线跳线；弯导线为二次贝塞尔曲线，拖动蓝点控制曲率，双击设置颜色
 - ✅ 双击属性：电阻/电容/电池（数值+单位）、正弦源（频率/交直流电压/相位）、
@@ -103,7 +103,7 @@ cd backend && cargo run   # 监听 127.0.0.1:8787
 - Rust 后端接入前，`localStorage` 模拟后端文件落盘（刷新页面可恢复会话），
   文件序列化为纯文本 JSON。
 
-## 编译后端（本机需已安装 Rust 工具链 + ngspice）
+## 编译后端（本机需已安装 Rust 工具链 + ngspice + ffmpeg）
 
 ```bash
 cd backend
@@ -114,6 +114,9 @@ cargo run        # 启动 HTTP/WebSocket 服务，监听 127.0.0.1:8787
 
 > ngspice 驱动目前采用 **CLI 子进程**（`ngspice -b`）：把网表写成临时文件，
 > 强制输出 ASCII rawfile，再解析成结构化的 `SimulationResult`（op 字典 / dc/ac/tran 曲线）。
+>
+> 音频输入需要 `ffmpeg`：上传的 wave 文件经 ffmpeg 转码成 44.1kHz/16-bit/单声道 PCM，
+> 再逐点内联成 PWL 电压源（`/api/upload`）。
 
 ### HTTP/WebSocket 服务
 
@@ -159,6 +162,7 @@ cargo run        # 启动 HTTP/WebSocket 服务，监听 127.0.0.1:8787
 | 电池（DC 源） | `V<name> n+ n- <电压>` |
 | 接地 / GND | 不产生器件，其引脚所在 net 映射到节点 `0`（记录 `* gnd <name>`） |
 | 正弦波发生器 | `V<name> n+ n- SIN(dc ac freq 0 0 phase)` |
+| 音频输入 | `V<name> n+ n- PWL(<44.1kHz PCM 逐点内联>)`（wave 文件经 ffmpeg 转码） |
 | 电压表 | `R<name> n+ n- 10000Meg`（10GΩ 采样，读节点电压） |
 | 电流表 | `V<name> n+ n- 0`（0V 电压源电流探针，读 `i(v<name>)`） |
 | 示波器 | 不产生器件，记录 `* probe X<name>: V(<node>)`，后端读 raw 波形 |

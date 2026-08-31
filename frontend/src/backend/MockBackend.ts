@@ -47,6 +47,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   power: "V",
   gnd: "0", // 接地标记不产生器件（占位）
   vsine: "V", // 正弦波发生器 → 正弦电压源
+  audio: "V", // 音频输入 → 内联 PWL 电压源（Mock 无真实数据）
   voltmeter: "R", // 电压表 → 大电阻采样
   ammeter: "V", // 电流表 → 0V 电压源电流探针
   oscilloscope: "X", // 示波器 → 探针（读取 raw 波形）
@@ -146,6 +147,9 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     } else if (comp.kind === "voltmeter") {
       // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 10000Meg`;
+    } else if (comp.kind === "audio") {
+      // 音频输入：Mock 无真实 PWL 数据，仅占位
+      line = `* audio ${comp.refdes}: PWL（Mock 无真实音频数据）`;
     } else if (comp.kind === "ammeter") {
       // 电流表：0V 电压源作为电流探针，后端读 i(v<refdes>)
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0`;
@@ -244,6 +248,10 @@ export class MockBackend implements Backend {
     await new Promise((r) => setTimeout(r, 120));
     this.emit({ kind: "simulation_done", requestId: "mock-1" });
     return fakeSimulation(request);
+  }
+
+  async uploadAudio(): Promise<{ id: string; duration: number }> {
+    throw new Error("Mock 后端不支持音频上传，请切换到真实后端");
   }
 
   on<K extends BackendEventName>(

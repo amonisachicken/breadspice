@@ -67,6 +67,7 @@ pub enum ComponentKind {
     Power,
     Gnd,
     Vsine,
+    Audio,
     Voltmeter,
     Ammeter,
     Oscilloscope,

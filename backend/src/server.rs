@@ -11,14 +11,17 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::{
+    body::Bytes,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use tokio::sync::broadcast;
 
+use crate::audio;
 use crate::domain::ComponentKind;
 use crate::netlist::build_netlist;
 use crate::ngspice::{AcSweep, AnalysisParams, CliNgspice, Ngspice};
@@ -43,12 +46,24 @@ pub fn router() -> Router {
     Router::new()
         .route("/", get(root))
         .route("/api", post(handle_api))
+        .route("/api/upload", post(handle_upload))
         .route("/ws", get(handle_ws))
         .with_state(state)
 }
 
 async fn root() -> &'static str {
     "breadboard-backend ok"
+}
+
+/// 音频上传：原始字节 -> ffmpeg 转码 -> PWL 注册表；返回 { id, duration }。
+async fn handle_upload(body: Bytes) -> (StatusCode, Json<serde_json::Value>) {
+    match audio::ingest_audio(&body) {
+        Ok((id, duration)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "id": id, "duration": duration })),
+        ),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
+    }
 }
 
 /// RPC 分发。
@@ -233,6 +248,7 @@ fn list_component_models() -> Vec<ComponentModel> {
         model(Power, "电池", &["+", "−"]),
         model(Gnd, "接地", &["gnd"]),
         model(Vsine, "正弦波发生器", &["+", "−"]),
+        model(Audio, "音频输入", &["+", "−"]),
         model(Voltmeter, "电压表", &["+", "−"]),
         model(Ammeter, "电流表", &["1", "2"]),
         model(Oscilloscope, "示波器", &["tip", "gnd"]),

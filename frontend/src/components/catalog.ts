@@ -230,6 +230,34 @@ function groundBody(): SVGGElement {
   return g;
 }
 
+/** 程序化绘制音频输入符号（圆角矩形 + WAV 字样）。 */
+function audioBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+
+  const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  rect.setAttribute("x", "-11");
+  rect.setAttribute("y", "-9");
+  rect.setAttribute("width", "22");
+  rect.setAttribute("height", "18");
+  rect.setAttribute("rx", "2");
+  rect.setAttribute("fill", "#e0f2fe");
+  rect.setAttribute("stroke", "#0284c7");
+  rect.setAttribute("stroke-width", "1");
+  g.appendChild(rect);
+
+  const text = document.createElementNS(SVG_NS, "text") as SVGTextElement;
+  text.setAttribute("x", "0");
+  text.setAttribute("y", "2.5");
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("font-size", "6");
+  text.setAttribute("font-weight", "bold");
+  text.setAttribute("fill", "#0369a1");
+  text.textContent = "WAV";
+  g.appendChild(text);
+
+  return g;
+}
+
 /** 元件目录（顺序即面板显示顺序）。 */
 export const CATALOG: CatalogEntry[] = [
   // —— 二极管 ×2 ——
@@ -504,6 +532,24 @@ export const CATALOG: CatalogEntry[] = [
     ],
     params: { freq: "1k", ac: "1", dc: "0", phase: "0" },
     info: "正弦波发生器\n双击设置频率/交流电压/直流电压/相位\n后端映射为 ngspice 正弦电压源（SIN）",
+  },
+
+  // —— 音频输入（wave 文件转码后作为电压源）——
+  {
+    id: "audio",
+    kind: "audio",
+    label: "音频输入",
+    value: "",
+    prefix: "W",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: audioBody,
+    terminals: [
+      { name: "+", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
+      { name: "−", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
+    ],
+    params: {},
+    info: "音频输入\n双击上传音频文件（后端经 ffmpeg 转码为 44.1kHz/16-bit/单声道）\n作为电压源输入；含音频时仅允许 tran 仿真",
   },
 
   // —— 电压表（10GΩ 采样 + 读节点电压）——

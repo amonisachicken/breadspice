@@ -14,6 +14,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use crate::audio::lookup_pwl;
 use crate::domain::{Circuit, ComponentInstance, ComponentKind, NetId, NodeId};
 use crate::models::MODELS_LIB;
 
@@ -73,6 +74,8 @@ fn spice_prefix(kind: ComponentKind) -> &'static str {
         ComponentKind::Gnd => "0",
         // 正弦波发生器 -> 正弦电压源
         ComponentKind::Vsine => "V",
+        // 音频输入 -> 内联 PWL 电压源
+        ComponentKind::Audio => "V",
         // 电压表 -> 大电阻采样
         ComponentKind::Voltmeter => "R",
         // 电流表 -> 0V 电压源电流探针（ngspice 会保存电压源电流）
@@ -228,6 +231,20 @@ fn build_device_line(
         ComponentKind::Voltmeter => format!("{prefix}{refdes} {n0} {n1} 10000Meg"),
         // 电流表：0V 电压源作为电流探针，后端读 i(v<refdes>)
         ComponentKind::Ammeter => format!("{prefix}{refdes} {n0} {n1} 0"),
+        // 音频输入：内联 PWL 电压源（params.audio = 注册表 id）
+        ComponentKind::Audio => {
+            let pwl = comp
+                .params
+                .as_ref()
+                .and_then(|p| p.get("audio"))
+                .and_then(|id| lookup_pwl(id))
+                .unwrap_or_default();
+            if pwl.is_empty() {
+                format!("* audio {refdes}: 未上传音频（占位）")
+            } else {
+                format!("{prefix}{refdes} {n0} {n1} PWL({pwl})")
+            }
+        }
         // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
         ComponentKind::Oscilloscope => format!("* probe {refdes}: V({n0})"),
         // 导线 / 跳线：近零电阻

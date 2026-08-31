@@ -41,6 +41,7 @@ import {
 import { reSnapPins, rotateWire } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
 import { formatNum, meterReading, scopeTrace } from "./backend/simResults";
+import { downloadTraceAsWav } from "./backend/wav";
 import type { AnalysisKind, SimulationResult, Trace } from "./types/protocol";
 
 import "./style.css";
@@ -181,6 +182,7 @@ app.innerHTML = `
         <span class="scope-hint" id="scope-hint">等待仿真</span>
       </div>
       <div class="modal__actions">
+        <button id="scope-download" type="button">下载 WAV</button>
         <button id="scope-close" type="button">关闭</button>
       </div>
     </div>
@@ -222,6 +224,17 @@ app.innerHTML = `
       <div class="modal__actions">
         <button id="sim-options-cancel" type="button">取消</button>
         <button id="sim-options-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="audio-dialog" hidden>
+    <div class="modal__box">
+      <h3>音频输入</h3>
+      <p class="meter-hint" id="audio-status">未上传音频（上传后作为电压源输入）</p>
+      <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden />
+      <div class="modal__actions">
+        <button id="audio-choose" type="button">选择音频文件</button>
+        <button id="audio-close" type="button">关闭</button>
       </div>
     </div>
   </div>
@@ -291,6 +304,7 @@ let analysisKind: AnalysisKind = "tran";
 let simParams: Record<string, unknown> = { step: 1e-5, stop: 1e-3 };
 let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
+let currentScopeTrace: Trace | null = null;
 
 subscribe(() => {
   updateStatus();
@@ -569,6 +583,11 @@ const simTranFields = document.querySelector<HTMLElement>("#sim-tran-fields")!;
 const simTranStep = document.querySelector<HTMLInputElement>("#sim-tran-step")!;
 const simTranStop = document.querySelector<HTMLInputElement>("#sim-tran-stop")!;
 
+const audioDialog = document.querySelector<HTMLDivElement>("#audio-dialog")!;
+const audioStatus = document.querySelector<HTMLElement>("#audio-status")!;
+const audioFileInput = document.querySelector<HTMLInputElement>("#audio-file")!;
+let audioTargetId: string | null = null;
+
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
   valueInput.value = value;
@@ -644,6 +663,10 @@ function openComponentDialog(id: string): void {
     openSineDialog(id, ins.params ?? {});
     return;
   }
+  if (ins.kind === "audio") {
+    openAudioDialog(id);
+    return;
+  }
   if (ins.kind === "voltmeter") {
     openMeterDialog(id, "电压表", "V");
     return;
@@ -681,6 +704,40 @@ function closeSineDialog(): void {
   sineTargetId = null;
 }
 
+// —— 音频输入对话框 ——
+function openAudioDialog(id: string): void {
+  audioTargetId = id;
+  const ins = getPlacedItem(id)?.instance;
+  const uploaded = ins?.params?.audio;
+  if (uploaded) {
+    audioStatus.textContent = `已上传（id: ${uploaded}，时长 ${ins?.params?.duration ?? "?"} s）`;
+  } else {
+    audioStatus.textContent = "未上传音频（上传后作为电压源输入）";
+  }
+  audioDialog.hidden = false;
+}
+
+function closeAudioDialog(): void {
+  audioDialog.hidden = true;
+  audioTargetId = null;
+}
+
+async function handleAudioFile(file: File): Promise<void> {
+  if (!audioTargetId) return;
+  audioStatus.textContent = "上传并转码中…";
+  try {
+    const { id, duration } = await backend.uploadAudio(file);
+    commitUpdate(audioTargetId, (ins) => {
+      ins.params = { ...(ins.params ?? {}), audio: id, duration: String(duration) };
+    });
+    audioStatus.textContent = `已上传（id: ${id}，时长 ${duration.toFixed(3)} s）`;
+    setStatusMessage("音频已上传");
+  } catch (err) {
+    audioStatus.textContent = "上传失败，请重试";
+    setStatusMessage(`音频上传失败：${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // —— 电压表 / 电流表读数对话框 ——
 function openMeterDialog(id: string, title: string, unit: "V" | "A"): void {
   meterTitle.textContent = title;
@@ -713,6 +770,7 @@ function openScopeDialog(id: string): void {
   const ins = getPlacedItem(id)?.instance;
   const trace =
     ins && lastSimCircuit && lastSimResult ? scopeTrace(lastSimCircuit, ins, lastSimResult) : null;
+  currentScopeTrace = trace;
   if (trace) {
     drawScopeTrace(trace);
   } else {
@@ -862,6 +920,20 @@ sineDialog.addEventListener("click", (e) => {
   if (e.target === sineDialog) closeSineDialog();
 });
 
+// —— 音频输入对话框事件 ——
+document.querySelector<HTMLButtonElement>("#audio-choose")!.addEventListener("click", () => {
+  audioFileInput.click();
+});
+audioFileInput.addEventListener("change", () => {
+  const file = audioFileInput.files?.[0];
+  audioFileInput.value = "";
+  if (file) void handleAudioFile(file);
+});
+document.querySelector<HTMLButtonElement>("#audio-close")!.addEventListener("click", closeAudioDialog);
+audioDialog.addEventListener("click", (e) => {
+  if (e.target === audioDialog) closeAudioDialog();
+});
+
 // —— 电压表 / 电流表 / 示波器对话框事件 ——
 document.querySelector<HTMLButtonElement>("#meter-close")!.addEventListener("click", closeMeterDialog);
 meterDialog.addEventListener("click", (e) => {
@@ -873,6 +945,15 @@ scopeDialog.addEventListener("click", (e) => {
   if (e.target === scopeDialog) closeScopeDialog();
 });
 
+document.querySelector<HTMLButtonElement>("#scope-download")!.addEventListener("click", () => {
+  if (currentScopeTrace) {
+    downloadTraceAsWav(currentScopeTrace, `scope-${currentScopeTrace.name.replace(/[^A-Za-z0-9_.-]/g, "_")}.wav`);
+    setStatusMessage("已导出 WAV");
+  } else {
+    setStatusMessage("暂无波形可下载，请先运行仿真");
+  }
+});
+
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeValueDialog();
@@ -882,6 +963,7 @@ window.addEventListener("keydown", (e) => {
     closeMeterDialog();
     closeScopeDialog();
     closeSimOptions();
+    closeAudioDialog();
   }
 });
 
@@ -1010,6 +1092,10 @@ async function runSimulation(): Promise<void> {
     setStatusMessage("电路为空，请先拖入元件");
     return;
   }
+  // 含音频输入时只允许 tran 仿真
+  if (circuit.components.some((c) => c.kind === "audio")) {
+    analysisKind = "tran";
+  }
   setStatusMessage(`仿真中（${analysisKind}）…`);
   try {
     const result = await backend.simulate({ circuit, analysis: analysisKind, params: simParams });
@@ -1065,7 +1151,16 @@ function syncSimOptionFields(): void {
 }
 
 function openSimOptions(): void {
-  simAnalysis.value = analysisKind;
+  const hasAudio = getPlaced().some((p) => p.instance.kind === "audio");
+  // 含音频输入时只允许 tran，其余模式灰显
+  for (const opt of Array.from(simAnalysis.options)) {
+    opt.disabled = hasAudio && opt.value !== "tran";
+  }
+  if (hasAudio) {
+    simAnalysis.value = "tran";
+  } else {
+    simAnalysis.value = analysisKind;
+  }
   // 直流扫描源默认填第一个电压源器件名（如 VB1）
   const firstSource = getPlaced().find(
     (p) => p.instance.kind === "power" || p.instance.kind === "vsine",
@@ -1082,7 +1177,8 @@ function closeSimOptions(): void {
 }
 
 function applySimOptions(): void {
-  analysisKind = simAnalysis.value as AnalysisKind;
+  const hasAudio = getPlaced().some((p) => p.instance.kind === "audio");
+  analysisKind = hasAudio ? "tran" : (simAnalysis.value as AnalysisKind);
   if (analysisKind === "dc") {
     simParams = {
       source: simDcSource.value.trim() || "VB1",
