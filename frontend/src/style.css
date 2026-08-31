@@ -389,6 +389,26 @@ button.toggle.active {
   margin-bottom: 8px;
 }
 
+.preset-list {
+  display: flex;
+  gap: 8px;
+}
+
+.preset-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.preset-btn:hover {
+  opacity: 0.85;
+}
+
 .modal__field label {
   width: 96px;
   font-size: 12px;

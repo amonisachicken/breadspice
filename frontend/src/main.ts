@@ -41,7 +41,7 @@ import {
 import { reSnapPins, rotateWire } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
 import { formatNum, meterReading, scopeTrace } from "./backend/simResults";
-import { downloadTraceAsWav } from "./backend/wav";
+import { downloadTraceAsWav, traceToWavBlob } from "./backend/wav";
 import type { AnalysisKind, SimulationResult, Trace } from "./types/protocol";
 
 import "./style.css";
@@ -182,6 +182,7 @@ app.innerHTML = `
         <span class="scope-hint" id="scope-hint">等待仿真</span>
       </div>
       <div class="modal__actions">
+        <button id="scope-play" type="button">▶ 播放</button>
         <button id="scope-download" type="button">下载 WAV</button>
         <button id="scope-close" type="button">关闭</button>
       </div>
@@ -230,10 +231,15 @@ app.innerHTML = `
   <div class="modal" id="audio-dialog" hidden>
     <div class="modal__box">
       <h3>音频输入</h3>
-      <p class="meter-hint" id="audio-status">未上传音频（上传后作为电压源输入）</p>
+      <p class="meter-hint" id="audio-status">未上传音频（上传或选择预设音符后作为电压源输入）</p>
+      <div class="modal__field">
+        <label>预设音符</label>
+        <div class="preset-list" id="preset-list"></div>
+      </div>
       <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden />
       <div class="modal__actions">
         <button id="audio-choose" type="button">选择音频文件</button>
+        <button id="audio-play" type="button">▶ 播放</button>
         <button id="audio-close" type="button">关闭</button>
       </div>
     </div>
@@ -587,7 +593,58 @@ const simTranStop = document.querySelector<HTMLInputElement>("#sim-tran-stop")!;
 const audioDialog = document.querySelector<HTMLDivElement>("#audio-dialog")!;
 const audioStatus = document.querySelector<HTMLElement>("#audio-status")!;
 const audioFileInput = document.querySelector<HTMLInputElement>("#audio-file")!;
+const presetList = document.querySelector<HTMLElement>("#preset-list")!;
+const audioPlayBtn = document.querySelector<HTMLButtonElement>("#audio-play")!;
+const scopePlayBtn = document.querySelector<HTMLButtonElement>("#scope-play")!;
 let audioTargetId: string | null = null;
+let audioPlayUrl: string | null = null;
+let audioPlayer: HTMLAudioElement | null = null;
+
+/** 预设音符（名称 + 图标颜色）。 */
+const AUDIO_PRESETS = [
+  { name: "C", color: "#009400" },
+  { name: "A", color: "#FF0057" },
+  { name: "G", color: "#FF0057" },
+  { name: "E", color: "#009400" },
+  { name: "D", color: "#009400" },
+];
+
+function playAudio(url: string): void {
+  if (audioPlayer) {
+    audioPlayer.pause();
+  }
+  audioPlayer = new Audio(url);
+  void audioPlayer.play().catch(() => {
+    setStatusMessage("播放失败");
+  });
+}
+
+/** 构建预设音符按钮（彩色大写字母）。 */
+function renderPresets(): void {
+  presetList.replaceChildren();
+  for (const p of AUDIO_PRESETS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "preset-btn";
+    btn.textContent = p.name;
+    btn.style.background = p.color;
+    btn.title = `预设音符 ${p.name}`;
+    btn.addEventListener("click", () => selectPreset(p.name));
+    presetList.appendChild(btn);
+  }
+}
+
+function selectPreset(name: string): void {
+  if (!audioTargetId) return;
+  commitUpdate(audioTargetId, (ins) => {
+    ins.params = { ...(ins.params ?? {}), audio: `preset:${name}`, duration: "7" };
+  });
+  audioStatus.textContent = `已选预设音符 ${name}（时长约 7 s）`;
+  audioPlayUrl = `/api/preset/${name}`;
+  setStatusMessage(`已选预设音符 ${name}`);
+}
+
+renderPresets();
 
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
@@ -725,6 +782,7 @@ function closeAudioDialog(): void {
 
 async function handleAudioFile(file: File): Promise<void> {
   if (!audioTargetId) return;
+  audioPlayUrl = URL.createObjectURL(file);
   audioStatus.textContent = "上传并转码中…";
   try {
     const { id, duration } = await backend.uploadAudio(file);
@@ -935,6 +993,14 @@ audioDialog.addEventListener("click", (e) => {
   if (e.target === audioDialog) closeAudioDialog();
 });
 
+audioPlayBtn.addEventListener("click", () => {
+  if (audioPlayUrl) {
+    playAudio(audioPlayUrl);
+  } else {
+    setStatusMessage("请先上传音频或选择预设音符");
+  }
+});
+
 // —— 电压表 / 电流表 / 示波器对话框事件 ——
 document.querySelector<HTMLButtonElement>("#meter-close")!.addEventListener("click", closeMeterDialog);
 meterDialog.addEventListener("click", (e) => {
@@ -944,6 +1010,15 @@ meterDialog.addEventListener("click", (e) => {
 document.querySelector<HTMLButtonElement>("#scope-close")!.addEventListener("click", closeScopeDialog);
 scopeDialog.addEventListener("click", (e) => {
   if (e.target === scopeDialog) closeScopeDialog();
+});
+
+scopePlayBtn.addEventListener("click", () => {
+  if (currentScopeTrace) {
+    const blob = traceToWavBlob(currentScopeTrace);
+    playAudio(URL.createObjectURL(blob));
+  } else {
+    setStatusMessage("暂无波形可播放，请先运行仿真");
+  }
 });
 
 document.querySelector<HTMLButtonElement>("#scope-download")!.addEventListener("click", () => {

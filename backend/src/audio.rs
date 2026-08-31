@@ -78,11 +78,15 @@ pub fn ingest_audio(bytes: &[u8]) -> Result<(String, f64), String> {
 
 /// 取 PWL 主体（供网表生成内联）。
 pub fn lookup_pwl(id: &str) -> Option<String> {
+    // 预设音频：id 形如 "preset:C"
+    if let Some(name) = id.strip_prefix("preset:") {
+        return crate::presets::lookup_preset(name);
+    }
     REGISTRY.lock().ok()?.get(id).map(|e| e.pwl.clone())
 }
 
 /// 16-bit 小端单声道 PCM → (PWL 主体, 时长秒)。采样值归一化到 ±1V。
-fn pcm_to_pwl(pcm: &[u8]) -> Result<(String, f64), String> {
+pub fn pcm_to_pwl(pcm: &[u8]) -> Result<(String, f64), String> {
     if pcm.len() % 2 != 0 {
         return Err("PCM 数据长度不是偶数".to_string());
     }

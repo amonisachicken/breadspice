@@ -13,8 +13,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use axum::{
     body::Bytes,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::State,
-    http::StatusCode,
+    extract::{Path, State},
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -48,6 +48,7 @@ pub fn router() -> Router {
         .route("/api", post(handle_api))
         .route("/api/upload", post(handle_upload))
         .route("/api/stop", post(handle_stop))
+        .route("/api/preset/:name", get(handle_preset))
         .route("/ws", get(handle_ws))
         .with_state(state)
 }
@@ -71,6 +72,14 @@ async fn handle_upload(body: Bytes) -> (StatusCode, Json<serde_json::Value>) {
 async fn handle_stop() -> Json<serde_json::Value> {
     let stopped = crate::ngspice::stop_running();
     Json(serde_json::json!({ "stopped": stopped }))
+}
+
+/// 返回内嵌预设音频的 WAV（供网页播放预览）。
+async fn handle_preset(Path(name): Path<String>) -> impl IntoResponse {
+    match crate::presets::preset_wav(&name) {
+        Some(wav) => ([(header::CONTENT_TYPE, "audio/wav")], wav).into_response(),
+        None => (StatusCode::NOT_FOUND, "preset not found").into_response(),
+    }
 }
 
 /// RPC 分发。
