@@ -452,8 +452,21 @@ zoomSlider.addEventListener("input", () => {
 document.querySelector<HTMLButtonElement>("#zoom-fit")!.addEventListener("click", fitZoom);
 
 // Delete / Backspace 删除选中元件；R 旋转选中元件并重置引脚连接。
+// 有对话框打开、或焦点在输入控件上时，不响应这些快捷键（避免在输入框按退格误删元件）。
+function isModalOpen(): boolean {
+  return document.querySelector(".modal:not([hidden])") !== null;
+}
+
+function isTypingTarget(e: KeyboardEvent): boolean {
+  const el = e.target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
 window.addEventListener("keydown", (e) => {
   if (previewMode) return; // 预览模式下禁用删除/旋转快捷键
+  if (isModalOpen() || isTypingTarget(e)) return;
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
     removePlaced(selectedId);
     selectedId = null;
