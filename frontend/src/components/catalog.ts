@@ -523,7 +523,7 @@ export const CATALOG: CatalogEntry[] = [
     info: "电压表\n双击显示两端电压差\n后端映射为大电阻（10000MΩ）+ 读节点电压",
   },
 
-  // —— 电流表（1Ω 采样 + 读电流）——
+  // —— 电流表（0V 电压源电流探针 + 读电流）——
   {
     id: "ammeter",
     kind: "ammeter",
@@ -537,7 +537,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "1", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
       { name: "2", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
     ],
-    info: "电流表\n双击显示流经自身的电流\n后端映射为小电阻（1mΩ）+ 读元件电流",
+    info: "电流表\n双击显示流经自身的电流\n后端映射为 0V 电压源电流探针（读 i(v<refdes>)）",
   },
 
   // —— 示波器（读 raw 波形）——

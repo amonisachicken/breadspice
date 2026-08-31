@@ -168,6 +168,14 @@ app.innerHTML = `
           </g>
           <line x1="150" y1="0" x2="150" y2="180" stroke="#334155" stroke-width="0.8" />
           <line x1="0" y1="90" x2="300" y2="90" stroke="#334155" stroke-width="0.8" />
+          <g fill="#94a3b8" font-size="8" font-family="monospace">
+            <text id="ax-xmin" x="8" y="176">—</text>
+            <text id="ax-xmid" x="150" y="176" text-anchor="middle">—</text>
+            <text id="ax-xmax" x="292" y="176" text-anchor="end">—</text>
+            <text id="ax-ymax" x="4" y="12">—</text>
+            <text id="ax-ymid" x="4" y="90">—</text>
+            <text id="ax-ymin" x="4" y="170">—</text>
+          </g>
           <polyline id="scope-trace" fill="none" stroke="#22c55e" stroke-width="1.5" points="" />
         </svg>
         <span class="scope-hint" id="scope-hint">等待仿真</span>
@@ -279,8 +287,8 @@ function updatePreviewUI(): void {
 const backend = getBackend();
 
 // —— 仿真状态 ——
-let analysisKind: AnalysisKind = "op";
-let simParams: Record<string, unknown> = {};
+let analysisKind: AnalysisKind = "tran";
+let simParams: Record<string, unknown> = { step: 1e-5, stop: 1e-3 };
 let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
 
@@ -538,6 +546,12 @@ const meterHint = document.querySelector<HTMLElement>("#meter-hint")!;
 const scopeDialog = document.querySelector<HTMLDivElement>("#scope-dialog")!;
 const scopeTraceEl = document.querySelector<SVGPolylineElement>("#scope-trace")!;
 const scopeHint = document.querySelector<HTMLElement>("#scope-hint")!;
+const axXMin = document.querySelector<SVGTextElement>("#ax-xmin")!;
+const axXMid = document.querySelector<SVGTextElement>("#ax-xmid")!;
+const axXMax = document.querySelector<SVGTextElement>("#ax-xmax")!;
+const axYMax = document.querySelector<SVGTextElement>("#ax-ymax")!;
+const axYMid = document.querySelector<SVGTextElement>("#ax-ymid")!;
+const axYMin = document.querySelector<SVGTextElement>("#ax-ymin")!;
 
 const simOptionsDialog = document.querySelector<HTMLDivElement>("#sim-options-dialog")!;
 const simAnalysis = document.querySelector<HTMLSelectElement>("#sim-analysis")!;
@@ -676,7 +690,7 @@ function openMeterDialog(id: string, title: string, unit: "V" | "A"): void {
     meterHint.textContent = "（未运行仿真，或仪表未连接）";
   } else {
     meterValue.textContent = `${reading} ${unit}`;
-    meterHint.textContent = "（最近一次 op 仿真结果）";
+    meterHint.textContent = "（最近一次仿真结果）";
   }
   meterDialog.hidden = false;
 }
@@ -703,19 +717,36 @@ function openScopeDialog(id: string): void {
     drawScopeTrace(trace);
   } else {
     scopeTraceEl.setAttribute("points", "");
+    clearScopeAxes();
     scopeHint.textContent = "等待仿真";
   }
 }
 
-function drawScopeTrace(trace: Trace): void {
-  scopeTraceEl.setAttribute("points", tracePoints(trace, 300, 180));
-  scopeHint.textContent = trace.name;
+interface ScopeBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
-function tracePoints(trace: Trace, w: number, h: number): string {
+function drawScopeTrace(trace: Trace): void {
+  const b = traceBounds(trace);
+  if (!b) {
+    scopeTraceEl.setAttribute("points", "");
+    clearScopeAxes();
+    scopeHint.textContent = "等待仿真";
+    return;
+  }
+  scopeTraceEl.setAttribute("points", tracePoints(trace, b, 300, 180));
+  updateScopeAxes(b);
+  // ac 分析显示频响曲线（幅度-频率），其余显示波形
+  scopeHint.textContent = analysisKind === "ac" ? `频响 ${trace.name}` : trace.name;
+}
+
+function traceBounds(trace: Trace): ScopeBounds | null {
   const xs = trace.x;
   const ys = trace.y;
-  if (xs.length === 0 || ys.length === 0) return "";
+  if (xs.length === 0 || ys.length === 0) return null;
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -726,16 +757,35 @@ function tracePoints(trace: Trace, w: number, h: number): string {
     if (ys[i] < minY) minY = ys[i];
     if (ys[i] > maxY) maxY = ys[i];
   }
-  const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
+  return { minX, maxX, minY, maxY };
+}
+
+function tracePoints(trace: Trace, b: ScopeBounds, w: number, h: number): string {
+  const spanX = b.maxX - b.minX || 1;
+  const spanY = b.maxY - b.minY || 1;
   const margin = 8;
   const pts: string[] = [];
-  for (let i = 0; i < xs.length; i++) {
-    const nx = margin + ((xs[i] - minX) / spanX) * (w - 2 * margin);
-    const ny = h - margin - ((ys[i] - minY) / spanY) * (h - 2 * margin);
+  for (let i = 0; i < trace.x.length; i++) {
+    const nx = margin + ((trace.x[i] - b.minX) / spanX) * (w - 2 * margin);
+    const ny = h - margin - ((trace.y[i] - b.minY) / spanY) * (h - 2 * margin);
     pts.push(`${nx.toFixed(2)},${ny.toFixed(2)}`);
   }
   return pts.join(" ");
+}
+
+function updateScopeAxes(b: ScopeBounds): void {
+  axXMin.textContent = formatNum(b.minX);
+  axXMid.textContent = formatNum((b.minX + b.maxX) / 2);
+  axXMax.textContent = formatNum(b.maxX);
+  axYMax.textContent = formatNum(b.maxY);
+  axYMid.textContent = formatNum((b.minY + b.maxY) / 2);
+  axYMin.textContent = formatNum(b.minY);
+}
+
+function clearScopeAxes(): void {
+  for (const el of [axXMin, axXMid, axXMax, axYMax, axYMid, axYMin]) {
+    el.textContent = "—";
+  }
 }
 
 function closeScopeDialog(): void {

@@ -160,7 +160,7 @@ cargo run        # 启动 HTTP/WebSocket 服务，监听 127.0.0.1:8787
 | 接地 / GND | 不产生器件，其引脚所在 net 映射到节点 `0`（记录 `* gnd <name>`） |
 | 正弦波发生器 | `V<name> n+ n- SIN(dc ac freq 0 0 phase)` |
 | 电压表 | `R<name> n+ n- 10000Meg`（10GΩ 采样，读节点电压） |
-| 电流表 | `R<name> n+ n- 1m`（1mΩ 采样，读元件电流） |
+| 电流表 | `V<name> n+ n- 0`（0V 电压源电流探针，读 `i(v<name>)`） |
 | 示波器 | 不产生器件，记录 `* probe X<name>: V(<node>)`，后端读 raw 波形 |
 | 导线 / 跳线 | `R<name> n+ n- 0.001`（近零电阻） |
 

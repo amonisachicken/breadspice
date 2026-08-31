@@ -41,6 +41,45 @@ export function voltageKey(netId: string): string {
   return "v(" + spiceNodeName(netId).toLowerCase() + ")";
 }
 
+/** 从仿真结果取一个标量读数：op 字典优先，否则从曲线取最后一个点（瞬态末值/直流值）。 */
+function scalarFrom(result: SimulationResult, key: string): number | null {
+  if (result.op) {
+    const v = result.op[key];
+    if (v !== undefined) return v;
+  }
+  if (result.traces) {
+    const t = result.traces.find((tr) => tr.name.toLowerCase() === key.toLowerCase());
+    if (t && t.y.length > 0) return t.y[t.y.length - 1];
+  }
+  return null;
+}
+
+/** 电路里的接地网集合（每个 gnd 元件引脚所在的 net）。 */
+export function groundNetIds(circuit: Circuit): Set<NetId> {
+  const map = nodeToNetMap(circuit);
+  const grounds = new Set<NetId>();
+  for (const comp of circuit.components) {
+    if (comp.kind === "gnd") {
+      const pin = comp.pins[0];
+      if (pin?.node) {
+        const net = map.get(pin.node);
+        if (net) grounds.add(net);
+      }
+    }
+  }
+  return grounds;
+}
+
+/** 某 net 的电压：接地网为 0，否则从 op/traces 查节点电压。 */
+function nodeVoltage(
+  result: SimulationResult,
+  netId: NetId,
+  grounds: Set<NetId>,
+): number | null {
+  if (grounds.has(netId)) return 0;
+  return scalarFrom(result, voltageKey(netId));
+}
+
 /** 仪表读数：电压表 -> 两端电压差；电流表 -> 流经自身的电流。 */
 export function meterReading(
   circuit: Circuit,
@@ -51,15 +90,16 @@ export function meterReading(
     const plus = pinNetId(circuit, ins, "+");
     const minus = pinNetId(circuit, ins, "−");
     if (plus === undefined || minus === undefined) return null;
-    const vp = result.op?.[voltageKey(plus)];
-    const vm = result.op?.[voltageKey(minus)];
-    if (vp === undefined || vm === undefined) return null;
+    const grounds = groundNetIds(circuit);
+    const vp = nodeVoltage(result, plus, grounds);
+    const vm = nodeVoltage(result, minus, grounds);
+    if (vp === null || vm === null) return null;
     return vp - vm;
   }
   if (ins.kind === "ammeter") {
-    // 电流表映射为小电阻采样：器件名 = "R" + refdes（如 RA1），ngspice 键 i(ra1)。
-    const key = "i(r" + ins.refdes.toLowerCase() + ")";
-    return result.op?.[key] ?? null;
+    // 电流表是 0V 电压源电流探针：器件名 = "V" + refdes（如 VA1），ngspice 键 i(va1)。
+    const key = "i(v" + ins.refdes.toLowerCase() + ")";
+    return scalarFrom(result, key);
   }
   return null;
 }

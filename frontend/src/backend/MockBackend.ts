@@ -48,7 +48,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   gnd: "0", // 接地标记不产生器件（占位）
   vsine: "V", // 正弦波发生器 → 正弦电压源
   voltmeter: "R", // 电压表 → 大电阻采样
-  ammeter: "R", // 电流表 → 小电阻采样
+  ammeter: "V", // 电流表 → 0V 电压源电流探针
   oscilloscope: "X", // 示波器 → 探针（读取 raw 波形）
   generic: "X",
 };
@@ -147,8 +147,8 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 10000Meg`;
     } else if (comp.kind === "ammeter") {
-      // 电流表：1mΩ 采样电阻，后端读流经自身的电流
-      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 1m`;
+      // 电流表：0V 电压源作为电流探针，后端读 i(v<refdes>)
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0`;
     } else if (comp.kind === "oscilloscope") {
       // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
       line = `* probe ${comp.refdes}: V(${nodes[0] ?? "0"})`;

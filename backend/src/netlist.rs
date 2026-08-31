@@ -75,8 +75,8 @@ fn spice_prefix(kind: ComponentKind) -> &'static str {
         ComponentKind::Vsine => "V",
         // 电压表 -> 大电阻采样
         ComponentKind::Voltmeter => "R",
-        // 电流表 -> 小电阻采样
-        ComponentKind::Ammeter => "R",
+        // 电流表 -> 0V 电压源电流探针（ngspice 会保存电压源电流）
+        ComponentKind::Ammeter => "V",
         // 示波器 -> 探针（读取 raw 波形）
         ComponentKind::Oscilloscope => "X",
         ComponentKind::Generic => "X",
@@ -226,8 +226,8 @@ fn build_device_line(
         }
         // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
         ComponentKind::Voltmeter => format!("{prefix}{refdes} {n0} {n1} 10000Meg"),
-        // 电流表：1mΩ 采样电阻，后端读流经自身的电流
-        ComponentKind::Ammeter => format!("{prefix}{refdes} {n0} {n1} 1m"),
+        // 电流表：0V 电压源作为电流探针，后端读 i(v<refdes>)
+        ComponentKind::Ammeter => format!("{prefix}{refdes} {n0} {n1} 0"),
         // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
         ComponentKind::Oscilloscope => format!("* probe {refdes}: V({n0})"),
         // 导线 / 跳线：近零电阻
@@ -549,7 +549,7 @@ mod tests {
             vec![
                 "VS1 n_rail_Lp n_rail_Lm SIN(0 1 1k 0 0 0)",
                 "RVM1 n_t1R n_rail_Lm 10000Meg",
-                "RA1 n_t1R n_rail_Lm 1m",
+                "VA1 n_t1R n_rail_Lm 0",
                 "RW1 n_t1L n_t1L 0.001",
                 "* probe X1: V(n_t1R)",
             ]
