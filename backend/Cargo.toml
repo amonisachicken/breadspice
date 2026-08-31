@@ -4,16 +4,16 @@
 name = "breadboard-backend"
 version = "0.1.0"
 edition = "2021"
-description = "虚拟面包板后端：将前端电路布局编译为 ngspice 网表并执行仿真（骨架）"
+description = "虚拟面包板后端：将前端电路布局编译为 ngspice 网表并执行仿真"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
 
-# 后续接入 ngspice 时按需添加：
-# - 通过 libngspice FFI：无需额外 crate，用 build.rs 探测并链接 libngspice
-# - 通过 HTTP/WebSocket 服务（前端 /api、/ws 代理指向 127.0.0.1:8787）：
-#   axum = "0.7"、tokio = { version = "1", features = ["full"] }
+# 后续按需添加：
+# - libngspice FFI：无需额外 crate，用 build.rs 探测并链接 libngspice
 
 [profile.release]
 opt-level = 2

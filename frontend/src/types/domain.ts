@@ -62,10 +62,12 @@ export type ComponentKind =
   | "pnp"
   | "nmos"
   | "pmos"
+  | "jfet"
   | "opamp"
   | "jumper" // 跳线（纯导线）
   | "wire" // 自由导线
   | "power" // 直流电源 / 电池
+  | "gnd" // 接地标记（引脚映射到节点 0）
   | "vsine" // 正弦波发生器（ngspice 正弦电压源）
   | "voltmeter" // 电压表（10GΩ 采样 + 读节点电压）
   | "ammeter" // 电流表（1mΩ 采样 + 读电流）

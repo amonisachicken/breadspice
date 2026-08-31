@@ -40,6 +40,8 @@ import {
 } from "./interaction/drag";
 import { reSnapPins, rotateWire } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
+import { formatNum, meterReading, scopeTrace } from "./backend/simResults";
+import type { AnalysisKind, SimulationResult, Trace } from "./types/protocol";
 
 import "./style.css";
 
@@ -148,7 +150,7 @@ app.innerHTML = `
     <div class="modal__box modal__box--wide">
       <h3>示波器</h3>
       <div class="scope-screen">
-        <svg viewBox="0 0 300 180" preserveAspectRatio="none">
+        <svg id="scope-svg" viewBox="0 0 300 180" preserveAspectRatio="none">
           <rect width="300" height="180" fill="#0f172a" />
           <g stroke="#1e293b" stroke-width="0.5">
             <line x1="37.5" y1="0" x2="37.5" y2="180" />
@@ -166,12 +168,52 @@ app.innerHTML = `
           </g>
           <line x1="150" y1="0" x2="150" y2="180" stroke="#334155" stroke-width="0.8" />
           <line x1="0" y1="90" x2="300" y2="90" stroke="#334155" stroke-width="0.8" />
-          <line x1="0" y1="90" x2="300" y2="90" stroke="#22c55e" stroke-width="1.5" />
+          <polyline id="scope-trace" fill="none" stroke="#22c55e" stroke-width="1.5" points="" />
         </svg>
-        <span class="scope-hint">等待仿真</span>
+        <span class="scope-hint" id="scope-hint">等待仿真</span>
       </div>
       <div class="modal__actions">
         <button id="scope-close" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="sim-options-dialog" hidden>
+    <div class="modal__box">
+      <h3>仿真选项</h3>
+      <div class="modal__field">
+        <label>分析类型</label>
+        <select id="sim-analysis">
+          <option value="op">工作点（op）</option>
+          <option value="dc">直流扫描（dc）</option>
+          <option value="ac">交流分析（ac）</option>
+          <option value="tran">瞬态分析（tran）</option>
+        </select>
+      </div>
+      <div id="sim-dc-fields" hidden>
+        <div class="modal__field"><label>扫描源（器件名）</label><input id="sim-dc-source" type="text" autocomplete="off" /></div>
+        <div class="modal__field"><label>起始 (V)</label><input id="sim-dc-start" type="number" step="any" value="0" /></div>
+        <div class="modal__field"><label>终止 (V)</label><input id="sim-dc-stop" type="number" step="any" value="9" /></div>
+        <div class="modal__field"><label>步长 (V)</label><input id="sim-dc-step" type="number" step="any" value="1" /></div>
+      </div>
+      <div id="sim-ac-fields" hidden>
+        <div class="modal__field"><label>扫描方式</label>
+          <select id="sim-ac-type">
+            <option value="dec">dec</option>
+            <option value="oct">oct</option>
+            <option value="lin">lin</option>
+          </select>
+        </div>
+        <div class="modal__field"><label>点数</label><input id="sim-ac-points" type="number" value="10" /></div>
+        <div class="modal__field"><label>起始 (Hz)</label><input id="sim-ac-start" type="number" step="any" value="10" /></div>
+        <div class="modal__field"><label>终止 (Hz)</label><input id="sim-ac-stop" type="number" step="any" value="1000000" /></div>
+      </div>
+      <div id="sim-tran-fields" hidden>
+        <div class="modal__field"><label>步长 (s)</label><input id="sim-tran-step" type="number" step="any" value="0.00001" /></div>
+        <div class="modal__field"><label>终止 (s)</label><input id="sim-tran-stop" type="number" step="any" value="0.001" /></div>
+      </div>
+      <div class="modal__actions">
+        <button id="sim-options-cancel" type="button">取消</button>
+        <button id="sim-options-ok" type="button">确定</button>
       </div>
     </div>
   </div>
@@ -235,6 +277,12 @@ function updatePreviewUI(): void {
 
 // 后端单例（updateStatus 在 initProject 触发的首次 emit 中就会用到，需先初始化）
 const backend = getBackend();
+
+// —— 仿真状态 ——
+let analysisKind: AnalysisKind = "op";
+let simParams: Record<string, unknown> = {};
+let lastSimResult: SimulationResult | null = null;
+let lastSimCircuit: Circuit | null = null;
 
 subscribe(() => {
   updateStatus();
@@ -475,6 +523,24 @@ const meterValue = document.querySelector<HTMLElement>("#meter-value")!;
 const meterHint = document.querySelector<HTMLElement>("#meter-hint")!;
 
 const scopeDialog = document.querySelector<HTMLDivElement>("#scope-dialog")!;
+const scopeTraceEl = document.querySelector<SVGPolylineElement>("#scope-trace")!;
+const scopeHint = document.querySelector<HTMLElement>("#scope-hint")!;
+
+const simOptionsDialog = document.querySelector<HTMLDivElement>("#sim-options-dialog")!;
+const simAnalysis = document.querySelector<HTMLSelectElement>("#sim-analysis")!;
+const simDcFields = document.querySelector<HTMLElement>("#sim-dc-fields")!;
+const simDcSource = document.querySelector<HTMLInputElement>("#sim-dc-source")!;
+const simDcStart = document.querySelector<HTMLInputElement>("#sim-dc-start")!;
+const simDcStop = document.querySelector<HTMLInputElement>("#sim-dc-stop")!;
+const simDcStep = document.querySelector<HTMLInputElement>("#sim-dc-step")!;
+const simAcFields = document.querySelector<HTMLElement>("#sim-ac-fields")!;
+const simAcType = document.querySelector<HTMLSelectElement>("#sim-ac-type")!;
+const simAcPoints = document.querySelector<HTMLInputElement>("#sim-ac-points")!;
+const simAcStart = document.querySelector<HTMLInputElement>("#sim-ac-start")!;
+const simAcStop = document.querySelector<HTMLInputElement>("#sim-ac-stop")!;
+const simTranFields = document.querySelector<HTMLElement>("#sim-tran-fields")!;
+const simTranStep = document.querySelector<HTMLInputElement>("#sim-tran-step")!;
+const simTranStop = document.querySelector<HTMLInputElement>("#sim-tran-stop")!;
 
 function openValueDialog(id: string, value: string, unit: string | undefined, units: string[]): void {
   dialogTargetId = id;
@@ -552,15 +618,15 @@ function openComponentDialog(id: string): void {
     return;
   }
   if (ins.kind === "voltmeter") {
-    openMeterDialog("电压表", "0.000 V", "读取两端电压差（10GΩ 采样），等待仿真");
+    openMeterDialog(id, "电压表", "V");
     return;
   }
   if (ins.kind === "ammeter") {
-    openMeterDialog("电流表", "0.000 A", "读取流经自身的电流（1mΩ 采样），等待仿真");
+    openMeterDialog(id, "电流表", "A");
     return;
   }
   if (ins.kind === "oscilloscope") {
-    openScopeDialog();
+    openScopeDialog(id);
     return;
   }
   const units = UNIT_SETS[ins.kind];
@@ -589,11 +655,25 @@ function closeSineDialog(): void {
 }
 
 // —— 电压表 / 电流表读数对话框 ——
-function openMeterDialog(title: string, value: string, hint: string): void {
+function openMeterDialog(id: string, title: string, unit: "V" | "A"): void {
   meterTitle.textContent = title;
-  meterValue.textContent = value;
-  meterHint.textContent = hint;
+  const reading = computeMeterReading(id);
+  if (reading === null) {
+    meterValue.textContent = unit === "V" ? "0.000 V" : "0.000 A";
+    meterHint.textContent = "（未运行仿真，或仪表未连接）";
+  } else {
+    meterValue.textContent = `${reading} ${unit}`;
+    meterHint.textContent = "（最近一次 op 仿真结果）";
+  }
   meterDialog.hidden = false;
+}
+
+function computeMeterReading(id: string): string | null {
+  if (!lastSimResult?.ok || !lastSimCircuit) return null;
+  const ins = getPlacedItem(id)?.instance;
+  if (!ins) return null;
+  const v = meterReading(lastSimCircuit, ins, lastSimResult);
+  return v === null ? null : formatNum(v);
 }
 
 function closeMeterDialog(): void {
@@ -601,8 +681,48 @@ function closeMeterDialog(): void {
 }
 
 // —— 示波器屏幕对话框 ——
-function openScopeDialog(): void {
+function openScopeDialog(id: string): void {
   scopeDialog.hidden = false;
+  const ins = getPlacedItem(id)?.instance;
+  const trace =
+    ins && lastSimCircuit && lastSimResult ? scopeTrace(lastSimCircuit, ins, lastSimResult) : null;
+  if (trace) {
+    drawScopeTrace(trace);
+  } else {
+    scopeTraceEl.setAttribute("points", "");
+    scopeHint.textContent = "等待仿真";
+  }
+}
+
+function drawScopeTrace(trace: Trace): void {
+  scopeTraceEl.setAttribute("points", tracePoints(trace, 300, 180));
+  scopeHint.textContent = trace.name;
+}
+
+function tracePoints(trace: Trace, w: number, h: number): string {
+  const xs = trace.x;
+  const ys = trace.y;
+  if (xs.length === 0 || ys.length === 0) return "";
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < xs.length; i++) {
+    if (xs[i] < minX) minX = xs[i];
+    if (xs[i] > maxX) maxX = xs[i];
+    if (ys[i] < minY) minY = ys[i];
+    if (ys[i] > maxY) maxY = ys[i];
+  }
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const margin = 8;
+  const pts: string[] = [];
+  for (let i = 0; i < xs.length; i++) {
+    const nx = margin + ((xs[i] - minX) / spanX) * (w - 2 * margin);
+    const ny = h - margin - ((ys[i] - minY) / spanY) * (h - 2 * margin);
+    pts.push(`${nx.toFixed(2)},${ny.toFixed(2)}`);
+  }
+  return pts.join(" ");
 }
 
 function closeScopeDialog(): void {
@@ -698,6 +818,7 @@ window.addEventListener("keydown", (e) => {
     closeSineDialog();
     closeMeterDialog();
     closeScopeDialog();
+    closeSimOptions();
   }
 });
 
@@ -782,12 +903,9 @@ document.querySelector<HTMLButtonElement>("#clear")!.addEventListener("click", (
   netlistPanel.hidden = true;
 });
 
-// —— 生成网表（把当前放置的电路交给 MockBackend，打通接口链路） ——
+// —— 生成网表（调用后端 build_netlist） ——
 document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("click", async () => {
-  const circuit: Circuit = {
-    breadboard: layout,
-    components: getPlaced().map((p) => p.instance),
-  };
+  const circuit = currentCircuit();
 
   if (circuit.components.length === 0) {
     log.textContent = "（电路为空，请先拖入元件）";
@@ -798,27 +916,139 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
     return;
   }
 
-  const models = await backend.listModels();
-  const netlist = await backend.buildNetlist(circuit);
-  log.textContent = [
-    `后端种类: ${backend.kind}`,
-    `可用模型: ${models.map((m) => m.label).join("、")}`,
-    `已放置: ${circuit.components.map((c) => `${c.refdes}(${c.value})`).join("、")}`,
-    ``,
-    `—— 当前电路网表（Mock 参考实现）——`,
-    netlist.text,
-  ].join("\n");
+  try {
+    const models = await backend.listModels();
+    const netlist = await backend.buildNetlist(circuit);
+    log.textContent = [
+      `后端种类: ${backend.kind}`,
+      `可用模型: ${models.map((m) => m.label).join("、")}`,
+      `已放置: ${circuit.components.map((c) => `${c.refdes}(${c.value})`).join("、")}`,
+      ``,
+      `—— 当前电路网表 ——`,
+      netlist.text,
+    ].join("\n");
+  } catch (err) {
+    log.textContent = `生成网表失败：${err instanceof Error ? err.message : String(err)}`;
+  }
   netlistPanel.hidden = false;
   netlistCollapsed = false;
   log.hidden = false;
   netlistCollapseBtn.textContent = "收起";
 });
 
-// —— 仿真按钮（占位符，待接入 ngspice）——
+// —— 仿真 ——
+function currentCircuit(): Circuit {
+  return { breadboard: layout, components: getPlaced().map((p) => p.instance) };
+}
+
+async function runSimulation(): Promise<void> {
+  const circuit = currentCircuit();
+  if (circuit.components.length === 0) {
+    setStatusMessage("电路为空，请先拖入元件");
+    return;
+  }
+  setStatusMessage(`仿真中（${analysisKind}）…`);
+  try {
+    const result = await backend.simulate({ circuit, analysis: analysisKind, params: simParams });
+    lastSimResult = result;
+    lastSimCircuit = circuit;
+    if (!result.ok) {
+      setStatusMessage(`仿真失败：${result.error ?? "未知错误"}`);
+      showSimResult(result);
+      return;
+    }
+    setStatusMessage("仿真完成");
+    showSimResult(result);
+  } catch (err) {
+    setStatusMessage(`仿真出错：${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function showSimResult(result: SimulationResult): void {
+  const lines: string[] = [`—— 仿真结果（${analysisKind}）——`];
+  if (!result.ok) {
+    lines.push("错误：" + (result.error ?? "未知错误"));
+  }
+  if (result.op) {
+    lines.push("工作点：");
+    for (const [name, v] of Object.entries(result.op)) {
+      lines.push(`  ${name} = ${formatNum(v)}`);
+    }
+  }
+  if (result.traces) {
+    lines.push("曲线：");
+    for (const t of result.traces) {
+      lines.push(`  ${t.name}: ${t.y.length} 点`);
+    }
+  }
+  lines.push("", `（后端：${backend.kind}）`);
+  log.textContent = lines.join("\n");
+  netlistPanel.hidden = false;
+  netlistCollapsed = false;
+  log.hidden = false;
+  netlistCollapseBtn.textContent = "收起";
+}
+
 document.querySelector<HTMLButtonElement>("#simulate")!.addEventListener("click", () => {
-  setStatusMessage("（占位）仿真功能尚未接入 ngspice");
+  void runSimulation();
 });
 
-document.querySelector<HTMLButtonElement>("#sim-options")!.addEventListener("click", () => {
-  setStatusMessage("（占位）仿真选项尚未实现");
+// —— 仿真选项对话框 ——
+function syncSimOptionFields(): void {
+  const a = simAnalysis.value;
+  simDcFields.hidden = a !== "dc";
+  simAcFields.hidden = a !== "ac";
+  simTranFields.hidden = a !== "tran";
+}
+
+function openSimOptions(): void {
+  simAnalysis.value = analysisKind;
+  // 直流扫描源默认填第一个电压源器件名（如 VB1）
+  const firstSource = getPlaced().find(
+    (p) => p.instance.kind === "power" || p.instance.kind === "vsine",
+  );
+  if (firstSource && !simDcSource.value) {
+    simDcSource.value = "V" + firstSource.instance.refdes;
+  }
+  syncSimOptionFields();
+  simOptionsDialog.hidden = false;
+}
+
+function closeSimOptions(): void {
+  simOptionsDialog.hidden = true;
+}
+
+function applySimOptions(): void {
+  analysisKind = simAnalysis.value as AnalysisKind;
+  if (analysisKind === "dc") {
+    simParams = {
+      source: simDcSource.value.trim() || "VB1",
+      start: Number(simDcStart.value) || 0,
+      stop: Number(simDcStop.value) || 9,
+      step: Number(simDcStep.value) || 1,
+    };
+  } else if (analysisKind === "ac") {
+    simParams = {
+      type: simAcType.value,
+      points: Number(simAcPoints.value) || 10,
+      start: Number(simAcStart.value) || 10,
+      stop: Number(simAcStop.value) || 1e6,
+    };
+  } else if (analysisKind === "tran") {
+    simParams = {
+      step: Number(simTranStep.value) || 1e-5,
+      stop: Number(simTranStop.value) || 1e-3,
+    };
+  } else {
+    simParams = {};
+  }
+  closeSimOptions();
+}
+
+document.querySelector<HTMLButtonElement>("#sim-options")!.addEventListener("click", openSimOptions);
+document.querySelector<HTMLButtonElement>("#sim-options-ok")!.addEventListener("click", applySimOptions);
+document.querySelector<HTMLButtonElement>("#sim-options-cancel")!.addEventListener("click", closeSimOptions);
+simAnalysis.addEventListener("change", syncSimOptionFields);
+simOptionsDialog.addEventListener("click", (e) => {
+  if (e.target === simOptionsDialog) closeSimOptions();
 });

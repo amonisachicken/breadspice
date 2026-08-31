@@ -204,6 +204,32 @@ function oscilloscopeBody(): SVGGElement {
   return g;
 }
 
+/** 程序化绘制接地符号（竖线 + 横条 + 三条递减斜线）。 */
+function groundBody(): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  const stroke = "#111827";
+  const w = "1.5";
+
+  const addLine = (x1: number, y1: number, x2: number, y2: number): void => {
+    const l = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+    l.setAttribute("x1", String(x1));
+    l.setAttribute("y1", String(y1));
+    l.setAttribute("x2", String(x2));
+    l.setAttribute("y2", String(y2));
+    l.setAttribute("stroke", stroke);
+    l.setAttribute("stroke-width", w);
+    g.appendChild(l);
+  };
+
+  addLine(0, -8, 0, 0); // 从引脚到横条
+  addLine(-7, 0, 7, 0); // 横条
+  addLine(-6, 3, 6, 3); // 三条递减斜线
+  addLine(-3.5, 5.5, 3.5, 5.5);
+  addLine(-1, 8, 1, 8);
+
+  return g;
+}
+
 /** 元件目录（顺序即面板显示顺序）。 */
 export const CATALOG: CatalogEntry[] = [
   // —— 二极管 ×2 ——
@@ -335,7 +361,7 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     id: "jfet-j201",
-    kind: "generic",
+    kind: "jfet",
     label: "J201",
     value: "J201",
     prefix: "J",
@@ -369,7 +395,7 @@ export const CATALOG: CatalogEntry[] = [
   // —— 运放 OP07（DIP-8，标准单运放引脚）——
   {
     id: "op07",
-    kind: "generic",
+    kind: "opamp",
     label: "OP07 运放",
     value: "OP07",
     prefix: "U",
@@ -413,6 +439,22 @@ export const CATALOG: CatalogEntry[] = [
       { name: "−", x: 0, y: 10, dx: 0, dy: 1, length: 27 },
     ],
     info: "电池 / 直流电压源\n双击蓝点设置电压\n后端映射为 ngspice 电压源（V 器件）",
+  },
+
+  // —— 接地 / GND（引脚映射到 ngspice 节点 0）——
+  {
+    id: "gnd",
+    kind: "gnd",
+    label: "接地",
+    value: "",
+    prefix: "G",
+    bodyPathIds: [],
+    bodyOrigin: { x: 0, y: 0 },
+    bodyFactory: groundBody,
+    terminals: [
+      { name: "gnd", x: 0, y: -8, dx: 0, dy: -1, length: 20 },
+    ],
+    info: "接地 / GND\n引脚所在之处映射到 ngspice 节点 0（地）\n用于显式指定地参考",
   },
 
   // —— 导线（直导线 + 弯导线）——

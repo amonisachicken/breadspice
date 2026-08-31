@@ -21,7 +21,7 @@ import type {
   SimulationRequest,
   SimulationResult,
 } from "../types/protocol";
-import type { Circuit, ComponentKind, NetId } from "../types/domain";
+import type { Circuit, ComponentInstance, ComponentKind, NetId } from "../types/domain";
 
 /** 元件引脚 -> ngspice 节点名。 */
 function nodeName(netId: NetId): string {
@@ -40,10 +40,12 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   pnp: "Q",
   nmos: "M",
   pmos: "M",
+  jfet: "J",
   opamp: "X",
   jumper: "R", // 跳线以近零电阻 R 近似
   wire: "R",
   power: "V",
+  gnd: "0", // 接地标记不产生器件（占位）
   vsine: "V", // 正弦波发生器 → 正弦电压源
   voltmeter: "R", // 电压表 → 大电阻采样
   ammeter: "R", // 电流表 → 小电阻采样
@@ -63,6 +65,17 @@ function spiceValue(value: string, unit?: string): string {
   return value + (suffix[unit] ?? unit);
 }
 
+/** 元件 -> ngspice 模型/子电路名（LED 颜色、运放 OP07 需映射到模型名）。 */
+function spiceModelName(comp: ComponentInstance): string {
+  if (comp.kind === "led") {
+    return { red: "LedRed", green: "LedGreen", blue: "LedBLUE" }[comp.value] ?? comp.value;
+  }
+  if (comp.kind === "opamp") {
+    return comp.value === "OP07" ? "OP07A" : comp.value;
+  }
+  return comp.value;
+}
+
 /**
  * 参考网表生成器（仅供 Mock 演示；生产环境由 Rust 后端实现）。
  * 根据每个元件的引脚落在哪个 net 上，展开为 SPICE 器件行。
@@ -71,9 +84,26 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
   const devices: NetlistDevice[] = [];
   const lines: string[] = ["* Virtual breadboard netlist (mock reference)", ""];
 
-  // net id -> 节点名缓存
+  // 建立 node id -> net id 索引
+  const nodeToNet = new Map<string, NetId>();
+  for (const net of circuit.breadboard.nets) {
+    for (const nodeId of net.nodeIds) nodeToNet.set(nodeId, net.id);
+  }
+
+  // 地网 -> ngspice 节点 0（只有显式 GND 元件定义地）
+  const groundNets = new Set<string>();
+  for (const comp of circuit.components) {
+    if (comp.kind === "gnd") {
+      const pin = comp.pins[0];
+      const netId = pin?.node ? nodeToNet.get(pin.node) : undefined;
+      if (netId) groundNets.add(netId);
+    }
+  }
+
+  // net id -> 节点名缓存（地网映射为 0）
   const nodeCache = new Map<NetId, string>();
   const resolveNode = (netId: NetId): string => {
+    if (groundNets.has(netId)) return "0";
     let n = nodeCache.get(netId);
     if (!n) {
       n = nodeName(netId);
@@ -82,18 +112,24 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     return n;
   };
 
-  // 建立 node id -> net id 索引
-  const nodeToNet = new Map<string, NetId>();
-  for (const net of circuit.breadboard.nets) {
-    for (const nodeId of net.nodeIds) nodeToNet.set(nodeId, net.id);
-  }
-
   for (const comp of circuit.components) {
+    if (comp.kind === "gnd") {
+      // 接地标记：不产生器件，仅记录其把所在 net 接到节点 0。
+      lines.push(`* gnd ${comp.refdes}: node 0`);
+      continue;
+    }
     const prefix = SPICE_PREFIX[comp.kind] ?? "X";
     const nodes = comp.pins.map((pin) => {
       const netId = pin.node ? nodeToNet.get(pin.node) : undefined;
       return netId ? resolveNode(netId) : "0"; // 未连接默认接地（占位）
     });
+
+    // 按引脚名解析节点（用于运放这类需要特定端口顺序的器件）。
+    const nodeOfPin = (pinName: string): string => {
+      const pin = comp.pins.find((p) => p.name === pinName);
+      const netId = pin?.node ? nodeToNet.get(pin.node) : undefined;
+      return netId ? resolveNode(netId) : "0";
+    };
 
     let line: string;
     if (comp.kind === "power") {
@@ -119,6 +155,12 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     } else if (comp.kind === "jumper" || comp.kind === "wire") {
       // 导线/跳线：近零电阻
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 0.001`;
+    } else if (comp.kind === "opamp") {
+      // 运放：X<name> <IN+> <IN-> <V+> <V-> <OUT> <subckt>（按引脚名映射 5 端口）
+      line = `X${comp.refdes} ${nodeOfPin("IN+")} ${nodeOfPin("IN-")} ${nodeOfPin("V+")} ${nodeOfPin("V-")} ${nodeOfPin("OUT")} ${spiceModelName(comp)}`;
+    } else if (comp.kind === "diode" || comp.kind === "led") {
+      // 二极管/LED：D<name> <阳极> <阴极> <模型名>
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${spiceModelName(comp)}`;
     } else if (nodes.length === 2) {
       line = `${prefix}${comp.refdes} ${nodes[0]} ${nodes[1]} ${spiceValue(comp.value, comp.unit)}`;
     } else {
