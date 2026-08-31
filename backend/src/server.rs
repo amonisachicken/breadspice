@@ -47,6 +47,7 @@ pub fn router() -> Router {
         .route("/", get(root))
         .route("/api", post(handle_api))
         .route("/api/upload", post(handle_upload))
+        .route("/api/stop", post(handle_stop))
         .route("/ws", get(handle_ws))
         .with_state(state)
 }
@@ -64,6 +65,12 @@ async fn handle_upload(body: Bytes) -> (StatusCode, Json<serde_json::Value>) {
         ),
         Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
     }
+}
+
+/// 提前终止正在运行的仿真。
+async fn handle_stop() -> Json<serde_json::Value> {
+    let stopped = crate::ngspice::stop_running();
+    Json(serde_json::json!({ "stopped": stopped }))
 }
 
 /// RPC 分发。

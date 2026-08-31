@@ -8,8 +8,8 @@
 //! 另一种策略（libngspice FFI）适合长时间交互与流式输出，留待后续按需接入。
 
 use std::collections::HashMap;
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 
 use crate::netlist::Netlist;
 use crate::protocol::{AnalysisKind, SimulationResult, Trace};
@@ -63,6 +63,20 @@ pub struct CliNgspice {
 
 /// 跨实例共享的临时目录序号，保证并发运行时不互相覆盖。
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// 当前正在运行的 ngspice 子进程 pid（0 表示无运行中进程）。
+static RUNNING_PID: AtomicI32 = AtomicI32::new(0);
+
+/// 终止当前正在运行的 ngspice 仿真（若有）。返回是否确实发出了终止。
+pub fn stop_running() -> bool {
+    let pid = RUNNING_PID.load(Ordering::SeqCst);
+    if pid <= 0 {
+        return false;
+    }
+    // SIGKILL 强制结束（ngspice CLI 无优雅中断信号）
+    let _ = Command::new("kill").arg("-9").arg(pid.to_string()).output();
+    true
+}
 
 impl CliNgspice {
     /// 用 `ngspice`（可用 `BREADSPICE_NGSPICE` 环境变量覆盖）构造。
@@ -264,12 +278,21 @@ impl Ngspice for CliNgspice {
         let batch = build_batch_netlist(&netlist.text, &aline, "result.raw");
         std::fs::write(workdir.join("circuit.cir"), batch).map_err(|e| format!("写网表失败：{e}"))?;
 
-        let output = Command::new(&self.binary)
+        let child = Command::new(&self.binary)
             .arg("-b")
             .arg("circuit.cir")
             .current_dir(&workdir)
-            .output()
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| format!("无法启动 ngspice（{}）：{e}", self.binary))?;
+
+        // 记录 pid，供 stop_running() 提前终止
+        RUNNING_PID.store(child.id() as i32, Ordering::SeqCst);
+        let output = child.wait_with_output();
+        RUNNING_PID.store(0, Ordering::SeqCst);
+
+        let output = output.map_err(|e| format!("等待 ngspice 结束失败：{e}"))?;
 
         // ngspice 对 tran/dc/ac 若无 .print/.plot/.fourier 会以非零码退出，
         // 但 rawfile 此时已正确写入；因此以 rawfile 是否可解析作为成功依据。
@@ -282,15 +305,16 @@ impl Ngspice for CliNgspice {
         match parsed {
             Ok(data) => Ok(data.into_simulation_result(analysis)),
             Err(parse_err) => {
-                let mut msg = format!("ngspice 仿真失败：{parse_err}");
-                if !output.status.success() {
-                    msg.push_str(&format!(
-                        "\n退出码 {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}",
-                        output.status.code(),
-                        String::from_utf8_lossy(&output.stdout),
-                        String::from_utf8_lossy(&output.stderr),
-                    ));
+                // 被信号终止（退出码为 None）→ 视为用户取消
+                if output.status.code().is_none() {
+                    return Err("仿真已取消".to_string());
                 }
+                let mut msg = format!("ngspice 仿真失败：{parse_err}");
+                msg.push_str(&format!(
+                    "\n退出码 {:?}\n--- stderr ---\n{}",
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr),
+                ));
                 Err(msg)
             }
         }

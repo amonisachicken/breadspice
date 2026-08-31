@@ -373,6 +373,11 @@ button.toggle.active {
   opacity: 0.55;
 }
 
+.palette.simulating {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 .canvas.preview {
   cursor: grab;
 }

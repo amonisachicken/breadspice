@@ -43,6 +43,9 @@ export interface Backend {
   /** 上传音频文件，返回后端转码后的 { id, duration }。 */
   uploadAudio(file: Blob): Promise<{ id: string; duration: number }>;
 
+  /** 提前终止正在运行的仿真。 */
+  stopSimulation(): Promise<void>;
+
   /**
    * 订阅后端主动推送的事件（进度、实时波形、状态变化）。
    * @returns 取消订阅函数。

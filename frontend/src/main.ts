@@ -305,6 +305,7 @@ let simParams: Record<string, unknown> = { step: 1e-5, stop: 1e-3 };
 let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
 let currentScopeTrace: Trace | null = null;
+let simulating = false;
 
 subscribe(() => {
   updateStatus();
@@ -322,8 +323,8 @@ updatePreviewUI();
 canvas.addEventListener("pointerdown", (e) => {
   const el = e.target as Element;
 
-  // 预览模式：不选中、不拖放，仅允许平移视图
-  if (previewMode) {
+  // 预览模式 / 仿真中：不选中、不拖放，仅允许平移视图
+  if (previewMode || simulating) {
     startCanvasPan(e);
     return;
   }
@@ -487,7 +488,7 @@ function isTypingTarget(e: KeyboardEvent): boolean {
 }
 
 window.addEventListener("keydown", (e) => {
-  if (previewMode) return; // 预览模式下禁用删除/旋转快捷键
+  if (previewMode || simulating) return; // 预览/仿真中禁用删除/旋转快捷键
   if (isModalOpen() || isTypingTarget(e)) return;
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
     removePlaced(selectedId);
@@ -1097,6 +1098,8 @@ async function runSimulation(): Promise<void> {
     analysisKind = "tran";
   }
   setStatusMessage(`仿真中（${analysisKind}）…`);
+  simulating = true;
+  updateSimulateButton();
   try {
     const result = await backend.simulate({ circuit, analysis: analysisKind, params: simParams });
     lastSimResult = result;
@@ -1110,6 +1113,9 @@ async function runSimulation(): Promise<void> {
     showSimResult(result);
   } catch (err) {
     setStatusMessage(`仿真出错：${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    simulating = false;
+    updateSimulateButton();
   }
 }
 
@@ -1138,8 +1144,28 @@ function showSimResult(result: SimulationResult): void {
   netlistCollapseBtn.textContent = "收起";
 }
 
-document.querySelector<HTMLButtonElement>("#simulate")!.addEventListener("click", () => {
-  void runSimulation();
+const simulateBtn = document.querySelector<HTMLButtonElement>("#simulate")!;
+
+function updateSimulateButton(): void {
+  simulateBtn.textContent = simulating ? "⏹️ 停止" : "▶️ 仿真";
+  palette.classList.toggle("simulating", simulating);
+}
+
+async function stopSimulation(): Promise<void> {
+  setStatusMessage("正在停止仿真…");
+  try {
+    await backend.stopSimulation();
+  } catch (err) {
+    setStatusMessage(`停止失败：${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+simulateBtn.addEventListener("click", () => {
+  if (simulating) {
+    void stopSimulation();
+  } else {
+    void runSimulation();
+  }
 });
 
 // —— 仿真选项对话框 ——

@@ -254,6 +254,10 @@ export class MockBackend implements Backend {
     throw new Error("Mock 后端不支持音频上传，请切换到真实后端");
   }
 
+  async stopSimulation(): Promise<void> {
+    // Mock 后端无真实仿真，无需处理
+  }
+
   on<K extends BackendEventName>(
     event: K,
     handler: (payload: Extract<BackendEvent, { kind: K }>) => void,

@@ -76,6 +76,10 @@ export class HttpBackend implements Backend {
     return (await resp.json()) as { id: string; duration: number };
   }
 
+  async stopSimulation(): Promise<void> {
+    await fetch(`${this.apiUrl}/stop`, { method: "POST" }).catch(() => undefined);
+  }
+
   on<K extends BackendEventName>(
     event: K,
     handler: (payload: Extract<BackendEvent, { kind: K }>) => void,
