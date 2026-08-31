@@ -42,6 +42,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   pmos: "M",
   jfet: "J",
   opamp: "X",
+  opamp2: "X",
   jumper: "R", // 跳线以近零电阻 R 近似
   wire: "R",
   power: "V",
@@ -162,6 +163,12 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
     } else if (comp.kind === "opamp") {
       // 运放：X<name> <IN+> <IN-> <V+> <V-> <OUT> <subckt>（按引脚名映射 5 端口）
       line = `X${comp.refdes} ${nodeOfPin("IN+")} ${nodeOfPin("IN-")} ${nodeOfPin("V+")} ${nodeOfPin("V-")} ${nodeOfPin("OUT")} ${spiceModelName(comp)}`;
+    } else if (comp.kind === "opamp2") {
+      // 双运放：两个 OP07A 子电路，共用 V+/V-
+      const vp = nodeOfPin("V+");
+      const vm = nodeOfPin("V-");
+      line = `X${comp.refdes}A ${nodeOfPin("INA+")} ${nodeOfPin("INA-")} ${vp} ${vm} ${nodeOfPin("OUTA")} OP07A\n` +
+        `X${comp.refdes}B ${nodeOfPin("INB+")} ${nodeOfPin("INB-")} ${vp} ${vm} ${nodeOfPin("OUTB")} OP07A`;
     } else if (comp.kind === "diode" || comp.kind === "led") {
       // 二极管/LED：D<name> <阳极> <阴极> <模型名>
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${spiceModelName(comp)}`;

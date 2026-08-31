@@ -214,7 +214,8 @@ fn parse_analysis_params(
             let p = params.ok_or_else(|| "tran 分析缺少参数".to_string())?;
             Ok(AnalysisParams::Tran {
                 step: num(p.get("step"), "step")?,
-                stop: num(p.get("stop"), "stop")?,
+                start: num(p.get("start"), "start")?,
+                duration: num(p.get("duration"), "duration")?,
             })
         }
     }
@@ -321,10 +322,11 @@ mod tests {
             AnalysisParams::Ac { sweep: AcSweep::Dec, points: 10, start: 1.0, stop: 1e6 }
         );
 
-        let json: serde_json::Value = serde_json::json!({ "step": 1e-5, "stop": 1e-3 });
+        let json: serde_json::Value =
+            serde_json::json!({ "step": 1e-5, "start": 0.19, "duration": 0.01 });
         assert_eq!(
             parse_analysis_params(AnalysisKind::Tran, Some(&json)).unwrap(),
-            AnalysisParams::Tran { step: 1e-5, stop: 1e-3 }
+            AnalysisParams::Tran { step: 1e-5, start: 0.19, duration: 0.01 }
         );
     }
 

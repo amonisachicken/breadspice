@@ -9,7 +9,7 @@
  */
 
 import type { Circuit, ComponentInstance, NetId, NodeId } from "../types/domain";
-import type { SimulationResult, Trace } from "../types/protocol";
+import type { AnalysisKind, SimulationResult, Trace } from "../types/protocol";
 
 /** net id -> SPICE 节点名（`n_` 前缀 + 非法字符替换）。 */
 export function spiceNodeName(netId: string): string {
@@ -116,6 +116,43 @@ export function scopeTrace(
   return result.traces.find((t) => t.name.toLowerCase() === key) ?? null;
 }
 
+/** 找交流分析信号源（第一个 vsine）的 "+" 引脚所在 net。 */
+export function findSourceNet(circuit: Circuit): NetId | undefined {
+  for (const comp of circuit.components) {
+    if (comp.kind === "vsine") {
+      const net = pinNetId(circuit, comp, "+");
+      if (net !== undefined) return net;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 示波器要显示的曲线：tran/dc 直接返回探针波形；ac 时转成 dB 频响
+ * （以信号源为 0dB 参考：20·log10(|V_probe| / |V_source|)）。
+ */
+export function scopeTraceForAnalysis(
+  circuit: Circuit,
+  ins: ComponentInstance,
+  result: SimulationResult,
+  analysis: AnalysisKind,
+): Trace | null {
+  const probe = scopeTrace(circuit, ins, result);
+  if (!probe || analysis !== "ac") return probe;
+
+  const sourceNet = findSourceNet(circuit);
+  if (sourceNet === undefined) return probe;
+  const source = result.traces?.find((t) => t.name.toLowerCase() === voltageKey(sourceNet));
+  if (!source) return probe;
+
+  const y = probe.y.map((v, i) => {
+    const s = source.y[i] ?? 0;
+    if (s === 0 || v === 0) return -Infinity;
+    return 20 * Math.log10(Math.abs(v) / Math.abs(s));
+  });
+  return { name: `${probe.name} (dB)`, x: probe.x.slice(), y };
+}
+
 /** 数字格式化（过大/过小用科学计数法，其余保留 4 位有效数字）。 */
 export function formatNum(v: number): string {
   if (!Number.isFinite(v)) return String(v);
@@ -123,4 +160,27 @@ export function formatNum(v: number): string {
   const a = Math.abs(v);
   if (a >= 1e6 || a < 1e-3) return v.toExponential(3);
   return String(Number(v.toPrecision(4)));
+}
+
+/** 工程计数（词头 m/μ/n/p/k/M/G），用于示波器刻度。 */
+export function formatEng(v: number): string {
+  if (!Number.isFinite(v)) return String(v);
+  if (Math.abs(v) < 1e-15) return "0";
+  const abs = Math.abs(v);
+  const table: Array<[number, string]> = [
+    [1e-12, "p"],
+    [1e-9, "n"],
+    [1e-6, "μ"],
+    [1e-3, "m"],
+    [1, ""],
+    [1e3, "k"],
+    [1e6, "M"],
+    [1e9, "G"],
+  ];
+  let chosen = table[0];
+  for (const t of table) {
+    if (abs >= t[0]) chosen = t;
+  }
+  const scaled = v / chosen[0];
+  return `${Number(scaled.toPrecision(4))}${chosen[1]}`;
 }

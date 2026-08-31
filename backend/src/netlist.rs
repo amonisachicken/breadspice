@@ -67,6 +67,7 @@ fn spice_prefix(kind: ComponentKind) -> &'static str {
         ComponentKind::Nmos | ComponentKind::Pmos => "M",
         ComponentKind::Jfet => "J",
         ComponentKind::Opamp => "X",
+        ComponentKind::Opamp2 => "X",
         // 跳线 / 导线以近零电阻 R 近似
         ComponentKind::Jumper | ComponentKind::Wire => "R",
         ComponentKind::Power => "V",
@@ -261,6 +262,24 @@ fn build_device_line(
             pin_node("OUT"),
             model_name(comp)
         ),
+        // 双运放（OP207）：两个 OP07A 子电路，共用 V+ / V-
+        ComponentKind::Opamp2 => {
+            let vp = pin_node("V+");
+            let vm = pin_node("V-");
+            let a = format!(
+                "X{refdes}A {} {} {vp} {vm} {} OP07A",
+                pin_node("INA+"),
+                pin_node("INA-"),
+                pin_node("OUTA")
+            );
+            let b = format!(
+                "X{refdes}B {} {} {vp} {vm} {} OP07A",
+                pin_node("INB+"),
+                pin_node("INB-"),
+                pin_node("OUTB")
+            );
+            format!("{a}\n{b}")
+        }
         // 二极管 / LED：D<name> <阳极> <阴极> <模型名>
         ComponentKind::Diode | ComponentKind::Led => {
             format!("{prefix}{refdes} {n0} {n1} {}", model_name(comp))
@@ -674,6 +693,36 @@ mod tests {
         assert_eq!(
             netlist.devices[0].line,
             "XU1 n_t1R n_t1L n_rail_Lp n_rail_Lm n_t1R OP07A"
+        );
+    }
+
+    #[test]
+    fn opamp2_emits_two_subcircuits_sharing_supply() {
+        let mut circuit = sample_circuit();
+        circuit.components = vec![comp(
+            "u1",
+            ComponentKind::Opamp2,
+            "U1",
+            "OP207",
+            None,
+            vec![
+                pin("OUTA", Some("t1a")),
+                pin("INA-", Some("t1b")),
+                pin("INA+", Some("t1f")),
+                pin("V-", Some("rail_Lm_1")),
+                pin("V+", Some("rail_Lp_1")),
+                pin("OUTB", Some("t1f")),
+                pin("INB-", Some("t1a")),
+                pin("INB+", Some("t1b")),
+            ],
+        )];
+
+        let netlist = build_netlist(&circuit);
+        assert_eq!(netlist.devices.len(), 1);
+        // 两个 OP07A 子电路，共用 V+/V-
+        assert_eq!(
+            netlist.devices[0].line,
+            "XU1A n_t1R n_t1L n_rail_Lp n_rail_Lm n_t1L OP07A\nXU1B n_t1L n_t1L n_rail_Lp n_rail_Lm n_t1R OP07A"
         );
     }
 

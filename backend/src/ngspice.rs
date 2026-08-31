@@ -41,7 +41,10 @@ pub enum AnalysisParams {
     },
     Tran {
         step: f64,
-        stop: f64,
+        /// 起始时间（秒）。
+        start: f64,
+        /// 持续时间（秒）；仿真到 start + duration。
+        duration: f64,
     },
 }
 
@@ -108,8 +111,9 @@ pub fn analysis_line(analysis: AnalysisKind, params: &AnalysisParams) -> Result<
             };
             Ok(format!(".ac {s} {points} {start} {stop}"))
         }
-        (AnalysisKind::Tran, AnalysisParams::Tran { step, stop }) => {
-            Ok(format!(".tran {step} {stop}"))
+        (AnalysisKind::Tran, AnalysisParams::Tran { step, start, duration }) => {
+            // .tran step stop start：从 start 开始保存，持续 duration
+            Ok(format!(".tran {step} {} {start}", start + duration))
         }
         (a, p) => Err(format!("分析类型 {a:?} 与参数 {p:?} 不匹配")),
     }
@@ -357,10 +361,10 @@ mod tests {
         assert_eq!(
             analysis_line(
                 AnalysisKind::Tran,
-                &AnalysisParams::Tran { step: 0.00001, stop: 0.001 }
+                &AnalysisParams::Tran { step: 0.00001, start: 0.19, duration: 0.01 }
             )
             .unwrap(),
-            ".tran 0.00001 0.001"
+            ".tran 0.00001 0.2 0.19"
         );
     }
 
@@ -492,7 +496,7 @@ Values:
             .run(
                 &netlist,
                 AnalysisKind::Tran,
-                &AnalysisParams::Tran { step: 1e-5, stop: 1e-3 },
+                &AnalysisParams::Tran { step: 1e-5, start: 0.0, duration: 1e-3 },
             )
             .unwrap();
         assert!(tran.ok);

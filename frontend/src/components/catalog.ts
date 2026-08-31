@@ -451,6 +451,47 @@ export const CATALOG: CatalogEntry[] = [
       "1/5 OFFSET 调零，2 IN−，3 IN+，4 V−，6 OUT，7 V+，8 NC",
   },
 
+  // —— OP207 双运放（DIP-8，内部两个 OP07A 单运放，共用 V+/V-）——
+  {
+    id: "op207",
+    kind: "opamp2",
+    label: "OP207 双运放",
+    value: "OP207",
+    prefix: "U",
+    bodyPathIds: ["path10", "path11", "path2", "path3", "path4", "path5", "path6", "path7", "path8", "path9"],
+    bodyOrigin: { x: 379.2, y: 273.6 },
+    terminals: [
+      { name: "OUTA", x: -14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
+      { name: "INA-", x: -14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
+      { name: "INA+", x: -14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
+      { name: "V-", x: -14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
+      { name: "V+", x: 14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
+      { name: "OUTB", x: 14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
+      { name: "INB-", x: 14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
+      { name: "INB+", x: 14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
+    ],
+    rigid: true,
+    styleOverrides: {
+      path2: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path3: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path4: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path5: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path6: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path7: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path8: { fill: "#C9A227", stroke: "#9A7A1C" },
+      path9: { fill: "#C9A227", stroke: "#9A7A1C" },
+    },
+    info:
+      "OP207 双运算放大器（DIP-8，内部两个 OP07A 单运放）\n" +
+      "       ┌──────┐\n" +
+      " OUT A │1    8│V+\n" +
+      " IN− A │2    7│OUT B\n" +
+      " IN+ A │3    6│IN− B\n" +
+      "    V− │4    5│IN+ B\n" +
+      "       └──────┘\n" +
+      "两个运放共用 V+（8 脚）与 V−（4 脚）",
+  },
+
   // —— 电池（直流电压源，映射到 ngspice V 器件）——
   {
     id: "battery",

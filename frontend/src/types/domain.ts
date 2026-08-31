@@ -64,6 +64,7 @@ export type ComponentKind =
   | "pmos"
   | "jfet"
   | "opamp"
+  | "opamp2"
   | "jumper" // 跳线（纯导线）
   | "wire" // 自由导线
   | "power" // 直流电源 / 电池

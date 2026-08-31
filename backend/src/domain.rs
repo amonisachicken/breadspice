@@ -62,6 +62,7 @@ pub enum ComponentKind {
     Pmos,
     Jfet,
     Opamp,
+    Opamp2,
     Jumper,
     Wire,
     Power,

@@ -40,7 +40,7 @@ import {
 } from "./interaction/drag";
 import { reSnapPins, rotateWire } from "./interaction/placement";
 import type { Circuit } from "./types/domain";
-import { formatNum, meterReading, scopeTrace } from "./backend/simResults";
+import { formatEng, formatNum, meterReading, scopeTraceForAnalysis } from "./backend/simResults";
 import { downloadTraceAsWav, traceToWavBlob } from "./backend/wav";
 import type { AnalysisKind, SimulationResult, Trace } from "./types/protocol";
 
@@ -214,13 +214,14 @@ app.innerHTML = `
             <option value="lin">lin</option>
           </select>
         </div>
-        <div class="modal__field"><label>点数</label><input id="sim-ac-points" type="number" value="10" /></div>
-        <div class="modal__field"><label>起始 (Hz)</label><input id="sim-ac-start" type="number" step="any" value="10" /></div>
-        <div class="modal__field"><label>终止 (Hz)</label><input id="sim-ac-stop" type="number" step="any" value="1000000" /></div>
+        <div class="modal__field"><label>点数</label><input id="sim-ac-points" type="number" value="100" /></div>
+        <div class="modal__field"><label>起始 (Hz)</label><input id="sim-ac-start" type="number" step="any" value="20" /></div>
+        <div class="modal__field"><label>终止 (Hz)</label><input id="sim-ac-stop" type="number" step="any" value="20000" /></div>
       </div>
       <div id="sim-tran-fields" hidden>
         <div class="modal__field"><label>步长 (s)</label><input id="sim-tran-step" type="number" step="any" value="0.00001" /></div>
-        <div class="modal__field"><label>终止 (s)</label><input id="sim-tran-stop" type="number" step="any" value="0.001" /></div>
+        <div class="modal__field"><label>起始 (s)</label><input id="sim-tran-start" type="number" step="any" value="0.19" /></div>
+        <div class="modal__field"><label>持续 (s)</label><input id="sim-tran-duration" type="number" step="any" value="0.01" /></div>
       </div>
       <div class="modal__actions">
         <button id="sim-options-cancel" type="button">取消</button>
@@ -307,7 +308,7 @@ const backend = getBackend();
 
 // —— 仿真状态 ——
 let analysisKind: AnalysisKind = "tran";
-let simParams: Record<string, unknown> = { step: 1e-5, stop: 1e-3 };
+let simParams: Record<string, unknown> = { step: 1e-5, start: 0.19, duration: 0.01 };
 let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
 let currentScopeTrace: Trace | null = null;
@@ -588,7 +589,8 @@ const simAcStart = document.querySelector<HTMLInputElement>("#sim-ac-start")!;
 const simAcStop = document.querySelector<HTMLInputElement>("#sim-ac-stop")!;
 const simTranFields = document.querySelector<HTMLElement>("#sim-tran-fields")!;
 const simTranStep = document.querySelector<HTMLInputElement>("#sim-tran-step")!;
-const simTranStop = document.querySelector<HTMLInputElement>("#sim-tran-stop")!;
+const simTranStart = document.querySelector<HTMLInputElement>("#sim-tran-start")!;
+const simTranDuration = document.querySelector<HTMLInputElement>("#sim-tran-duration")!;
 
 const audioDialog = document.querySelector<HTMLDivElement>("#audio-dialog")!;
 const audioStatus = document.querySelector<HTMLElement>("#audio-status")!;
@@ -828,7 +830,9 @@ function openScopeDialog(id: string): void {
   scopeDialog.hidden = false;
   const ins = getPlacedItem(id)?.instance;
   const trace =
-    ins && lastSimCircuit && lastSimResult ? scopeTrace(lastSimCircuit, ins, lastSimResult) : null;
+    ins && lastSimCircuit && lastSimResult
+      ? scopeTraceForAnalysis(lastSimCircuit, ins, lastSimResult, analysisKind)
+      : null;
   currentScopeTrace = trace;
   if (trace) {
     drawScopeTrace(trace);
@@ -891,12 +895,29 @@ function tracePoints(trace: Trace, b: ScopeBounds, w: number, h: number): string
 }
 
 function updateScopeAxes(b: ScopeBounds): void {
-  axXMin.textContent = formatNum(b.minX);
-  axXMid.textContent = formatNum((b.minX + b.maxX) / 2);
-  axXMax.textContent = formatNum(b.maxX);
-  axYMax.textContent = formatNum(b.maxY);
-  axYMid.textContent = formatNum((b.minY + b.maxY) / 2);
-  axYMin.textContent = formatNum(b.minY);
+  const xu = xAxisUnit();
+  axXMin.textContent = formatEng(b.minX) + xu;
+  axXMid.textContent = formatEng((b.minX + b.maxX) / 2) + xu;
+  axXMax.textContent = formatEng(b.maxX) + xu;
+  axYMax.textContent = formatAxisY(b.maxY);
+  axYMid.textContent = formatAxisY((b.minY + b.maxY) / 2);
+  axYMin.textContent = formatAxisY(b.minY);
+}
+
+function xAxisUnit(): string {
+  if (analysisKind === "ac") return "Hz";
+  if (analysisKind === "tran") return "s";
+  if (analysisKind === "dc") return "V";
+  return "";
+}
+
+/** y 轴刻度：ac 频响显示 dB，其余用工程词头 + 单位。 */
+function formatAxisY(v: number): string {
+  if (analysisKind === "ac") {
+    if (!Number.isFinite(v)) return v === -Infinity ? "-∞" : String(v);
+    return String(Number(v.toPrecision(4))) + "dB";
+  }
+  return formatEng(v) + "V";
 }
 
 function clearScopeAxes(): void {
@@ -1297,14 +1318,15 @@ function applySimOptions(): void {
   } else if (analysisKind === "ac") {
     simParams = {
       type: simAcType.value,
-      points: Number(simAcPoints.value) || 10,
-      start: Number(simAcStart.value) || 10,
-      stop: Number(simAcStop.value) || 1e6,
+      points: Number(simAcPoints.value) || 100,
+      start: Number(simAcStart.value) || 20,
+      stop: Number(simAcStop.value) || 20000,
     };
   } else if (analysisKind === "tran") {
     simParams = {
       step: Number(simTranStep.value) || 1e-5,
-      stop: Number(simTranStop.value) || 1e-3,
+      start: Number(simTranStart.value) || 0.19,
+      duration: Number(simTranDuration.value) || 0.01,
     };
   } else {
     simParams = {};
