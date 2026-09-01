@@ -897,12 +897,17 @@ function traceBounds(trace: Trace): ScopeBounds | null {
 }
 
 function tracePoints(trace: Trace, b: ScopeBounds, w: number, h: number): string {
-  const spanX = b.maxX - b.minX || 1;
+  // ac 频响的横轴是对数（dec 扫描），其余按线性映射
+  const logX = analysisKind === "ac";
+  const lo = logX ? Math.log10(Math.max(b.minX, 1e-12)) : b.minX;
+  const hi = logX ? Math.log10(Math.max(b.maxX, 1e-12)) : b.maxX;
+  const spanX = hi - lo || 1;
   const spanY = b.maxY - b.minY || 1;
   const margin = 8;
   const pts: string[] = [];
   for (let i = 0; i < trace.x.length; i++) {
-    const nx = margin + ((trace.x[i] - b.minX) / spanX) * (w - 2 * margin);
+    const xv = logX ? Math.log10(Math.max(trace.x[i], 1e-12)) : trace.x[i];
+    const nx = margin + ((xv - lo) / spanX) * (w - 2 * margin);
     const ny = h - margin - ((trace.y[i] - b.minY) / spanY) * (h - 2 * margin);
     pts.push(`${nx.toFixed(2)},${ny.toFixed(2)}`);
   }
@@ -911,12 +916,33 @@ function tracePoints(trace: Trace, b: ScopeBounds, w: number, h: number): string
 
 function updateScopeAxes(b: ScopeBounds): void {
   const xu = xAxisUnit();
-  axXMin.textContent = formatEng(b.minX) + xu;
-  axXMid.textContent = formatEng((b.minX + b.maxX) / 2) + xu;
-  axXMax.textContent = formatEng(b.maxX) + xu;
+  if (analysisKind === "ac") {
+    // ac 横轴按十进制（dec）刻度：左/中/右分别为首尾十的幂及其中点
+    const [lo, mid, hi] = decadeTicks(b.minX, b.maxX);
+    axXMin.textContent = formatEng(lo) + xu;
+    axXMid.textContent = formatEng(mid) + xu;
+    axXMax.textContent = formatEng(hi) + xu;
+  } else {
+    axXMin.textContent = formatEng(b.minX) + xu;
+    axXMid.textContent = formatEng((b.minX + b.maxX) / 2) + xu;
+    axXMax.textContent = formatEng(b.maxX) + xu;
+  }
   axYMax.textContent = formatAxisY(b.maxY);
   axYMid.textContent = formatAxisY((b.minY + b.maxY) / 2);
   axYMin.textContent = formatAxisY(b.minY);
+}
+
+/** 返回对数横轴的十进制（dec）刻度 [左, 中, 右]：两端取覆盖范围的 10 的幂，中点为几何中值。 */
+function decadeTicks(minX: number, maxX: number): [number, number, number] {
+  const safeMin = Math.max(minX, 1e-12);
+  const safeMax = Math.max(maxX, 1e-12);
+  const loExp = Math.ceil(Math.log10(safeMin));
+  const hiExp = Math.floor(Math.log10(safeMax));
+  if (Number.isFinite(loExp) && Number.isFinite(hiExp) && hiExp >= loExp) {
+    return [Math.pow(10, loExp), Math.pow(10, (loExp + hiExp) / 2), Math.pow(10, hiExp)];
+  }
+  const mid = Math.sqrt(safeMin * safeMax);
+  return [minX, mid, maxX];
 }
 
 function xAxisUnit(): string {

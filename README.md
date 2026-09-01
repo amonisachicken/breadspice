@@ -1,7 +1,12 @@
 # 面包板仿真 · BreadSpice
 
-一个**虚拟面包板**：在面包板上拖拽元件搭建电路，后端用 **Rust + ngspice** 生成网表并执行真实仿真。
-前端 **Vite + Vanilla TypeScript** 负责渲染与交互，通过 HTTP/WebSocket 对接后端仿真服务。
+一个**虚拟面包板**：在浏览器里像搭真实电路一样拖拽元件、连导线，后端用 **Rust + ngspice** 生成网表并执行真实仿真，结果回传到前端实时显示。
+
+| 层 | 技术栈 |
+| --- | --- |
+| 前端 | Vite 5 + Vanilla TypeScript（SVG 渲染、拖拽交互） |
+| 后端 | Rust（axum 0.7 / tokio / serde）+ ngspice 39（CLI 子进程）+ rustfft 6 + ffmpeg |
+| 通信 | HTTP JSON-RPC + WebSocket 事件流，前后端协议类型一一对应 |
 
 > 本项目使用了 [ngspice](https://github.com/ngspice/ngspice)（BSD-3-Clause）与
 > [DIY Layout Creator](https://github.com/bancika/diy-layout-creator)（GPL-3.0）的开源成果，
@@ -9,18 +14,62 @@
 
 ## 功能特性
 
-- ✅ 面包板 SVG 渲染 + 布局生成器对齐真实孔位
-- ✅ 元件库：电阻、电容、二极管 ×2、LED ×3、晶体管 ×4（NPN/PNP/JFET/MOS）、运放 OP07、OP207 双运放、
-  电池、正弦波发生器、音频输入、电压表、电流表、示波器、直/弯导线、接地/GND
-- ✅ 拖拽放置、任意旋转（蓝点 / `R` 键 90°）、引脚伸缩（绿点）、IC 刚性锁定、导线（直/弯 + 颜色）
-- ✅ 双击属性：数值+单位、正弦参数、导线颜色、仪表读数、示波器、半导体/IC 介绍
+- ✅ 面包板 SVG 渲染 + 布局生成器，孔位与真实无焊面包板对齐
+- ✅ 元件库：电阻、电容、二极管 ×2（1N4148 / 1N5817）、LED ×3（红/绿/蓝）、
+  三极管 ×4（BC549C NPN / BC559C PNP / J201 JFET / 2N7000 NMOS）、
+  运放 OP07 / OP207 双运放、电池、正弦波发生器、音频输入、电压表、电流表、示波器、直/弯导线、接地 GND
+- ✅ 拖拽放置、任意角度旋转（蓝点 / `R` 键 90°）、引脚伸缩（绿点）、IC 刚性锁定、导线（直/弯 + 颜色）
+- ✅ 双击属性：数值 + 单位、正弦参数（频率/交流/直流/相位）、导线颜色、仪表读数、示波器、半导体/IC 引脚说明
 - ✅ 保存布局（`.bread`）/ 撤销 / 重做 / 下载 / 导入 / 预览模式
-- ✅ 网表生成 + 真实 ngspice 仿真（`op` / `dc` / `ac` / `tran`，默认 `tran`，tran 支持起始时间/持续时长，ac 默认 dec 100 点 20–20000Hz）
-- ✅ 电压表/电流表实时读数；示波器波形（m/μ/n/p 词头刻度、ac 模式 dB 频响、tran+正弦源可做 FFT 频谱）
-- ✅ 音频输入：上传音频（ffmpeg 转码为 44.1kHz / 16-bit / 单声道）或选择内嵌预设音符（C/A/G/E/D）
-- ✅ 示波器可「▶ 播放」预览波形、「下载 WAV」导出 44.1kHz 16-bit 单声道音频
+- ✅ 网表生成 + 真实 ngspice 仿真：`op` / `dc` / `ac` / `tran`（默认 `tran`，可自定义起始时间与持续时长）
+- ✅ 电压表 / 电流表实时读数
+- ✅ 示波器：波形（工程词头刻度）、ac 模式 dB 频响（对数横轴按 **dec** 十进位刻度）、tran + 正弦源可一键切换 **FFT 频谱**（对数频率轴、dB 纵轴）
+- ✅ 音频输入：上传音频（ffmpeg 转码为 44.1kHz / 16-bit / 单声道）或选择内嵌预设音符（C / A / G / E / D）
+- ✅ 示波器「▶ 播放」预览波形、「下载 WAV」导出 44.1kHz 16-bit 单声道音频
 - ✅ 仿真中锁定编辑（类预览模式）；「⏹️ 停止」优雅取消（保留已算出的部分波形）
-- ✅ 电路含音频输入时仅允许 `tran` 仿真（其余模式灰显）
+- ✅ 电路含音频输入时仅允许 `tran` 仿真（其余分析类型灰显）
+
+## 快速开始
+
+### 依赖
+
+- **Rust** 工具链（rustc / cargo）
+- **ngspice**（`ngspice -b` 可执行）
+- **ffmpeg**（音频上传转码用）
+- **Node.js + npm**（前端）
+
+### 后端
+
+```bash
+cd backend
+cargo build
+cargo test       # 单元测试 + 真跑 ngspice 的集成测试（找不到 ngspice 时自动跳过）
+cargo run        # 启动服务，默认监听 127.0.0.1:8787（可用 BREADSPICE_BIND 覆盖）
+```
+
+- ngspice 驱动采用 **CLI 子进程**（`ngspice -b -r result.raw`）：`-r` 增量写出 ASCII rawfile，再解析成结构化结果。
+- 音频转码需要 **ffmpeg**（上传音频 → 44.1kHz / 16-bit / 单声道 PCM → 内联 PWL 电压源）。
+
+### 前端
+
+```bash
+cd frontend
+npm install
+npm run dev        # 开发服务器 http://localhost:5173，/api、/ws 已代理到 127.0.0.1:8787
+npm run build      # 类型检查 + 产物构建
+```
+
+> 前端默认连真实 Rust 后端（`HttpBackend`）。离线调试可设 `VITE_USE_MOCK=1` 回退到 `MockBackend`（本地占位实现，不发真实仿真）。
+
+## 使用说明
+
+1. 启动后端和前端，打开 http://localhost:5173。
+2. 从右侧元件库拖入元件到面包板；拖蓝点旋转、拖绿点伸缩引脚，`R` 键旋转。
+3. 双击蓝点设置数值 / 单位 / 颜色 / 正弦参数；半导体 / IC 双击查看引脚说明。
+4. 放置「接地 GND」元件显式指定地参考（电池不再自动接地）。
+5. 点「▶️ 仿真」运行（默认 `tran`，可用「仿真选项」切换 `op` / `dc` / `ac` / `tran`）。
+6. 双击电压表 / 电流表看读数；双击示波器看波形（可「▶ 播放」/「下载 WAV」，tran + 正弦源可切「FFT」）。
+7. 音频输入：双击上传音频，或点彩色音符按钮选预设，再搭电路仿真。
 
 ## 目录结构
 
@@ -50,45 +99,24 @@ breadboard/
         ├── presets.rs               # 内嵌预设音符（include_bytes!，按需转 PWL 并缓存）
         ├── netlist.rs               # 网表生成（孔位→net→SPICE 节点 + 模型注入 + 接地）
         ├── ngspice.rs               # ngspice 驱动（CLI 子进程 + rawfile 解析 + 优雅取消）
+        ├── fft.rs                   # 示波器 FFT（rustfft，去直流 + Hann 窗 + dB 频谱）
         ├── server.rs                # HTTP/WebSocket 服务（axum）
         ├── lib.rs
         └── main.rs
 ```
 
-## 运行
+## 仿真分析类型
 
-### 后端（需 Rust 工具链 + ngspice + ffmpeg）
+| 类型 | 参数 | 说明 |
+| --- | --- | --- |
+| `op` | — | 直流工作点，返回各节点电压 |
+| `dc` | `source` `start` `stop` `step` | 直流扫描（`.dc`），扫描某个电压源 |
+| `ac` | `type`（dec/oct/lin）`points` `start` `stop` | 交流频响（`.ac`），默认 `dec` 100 点 20–20000Hz |
+| `tran` | `step` `start` `duration` | 瞬态分析（`.tran`），默认步长 1e-5、起始 0.19s、持续 0.01s |
 
-```bash
-cd backend
-cargo build
-cargo test       # 单元测试 + 真跑 ngspice 的集成测试（找不到 ngspice 时自动跳过）
-cargo run        # 启动服务，监听 127.0.0.1:8787
-```
-
-- ngspice 驱动采用 **CLI 子进程**（`ngspice -b`）：`-r` 增量写出 ASCII rawfile，再解析成结构化结果。
-- 音频转码需要 **ffmpeg**（上传音频 → 44.1kHz / 16-bit / 单声道 PCM → 内联 PWL 电压源）。
-
-### 前端
-
-```bash
-cd frontend
-npm install
-npm run dev        # 开发服务器 http://localhost:5173，/api、/ws 已代理到 127.0.0.1:8787
-npm run build      # 类型检查 + 产物构建
-```
-
-> 前端默认连真实 Rust 后端（`HttpBackend`）。离线调试可设 `VITE_USE_MOCK=1` 回退到 `MockBackend`。
-
-## 使用
-
-1. 启动后端和前端，打开 http://localhost:5173。
-2. 从右侧元件库拖入元件到面包板；拖蓝点旋转、拖绿点伸缩引脚，`R` 键旋转。
-3. 双击蓝点设置数值/单位/颜色/正弦参数；半导体/IC 双击查看介绍。
-4. 放置「接地/GND」元件指定地参考（电池不再自动接地）。
-5. 点「▶️ 仿真」运行（默认 tran，可用「仿真选项」切换 op/dc/ac/tran）。
-6. 双击电压表/电流表看读数；双击示波器看波形（可「▶ 播放」/「下载 WAV」）。
-7. 音频输入：双击上传音频，或点彩色音符按钮选预设，再搭电路仿真。
+- **ac 频响**：示波器把幅值转为 dB（`20·log10(|v|/√2)`，1V 有效值 = 0dB），横轴按 **对数（dec 十进位）** 绘制并标注 10 的幂刻度。
+- **FFT 频谱**：仅 `tran` 且电路含正弦波发生器时可用；后端做去直流 + Hann 窗 + FFT，横轴为对数频率（0–40kHz）、纵轴为 dB。
+- 含音频输入的电路只能跑 `tran`。
 
 ## 元件 → ngspice 模型映射
 
@@ -101,7 +129,7 @@ npm run build      # 类型检查 + 产物构建
 | 运放 OP07 | `X<name> <IN+> <IN-> <V+> <V-> <OUT> OP07A` |
 | OP207 双运放 | 两个 `X<name>A/B ... OP07A` 子电路，共用 `V+` / `V-` |
 | 电池（DC 源） | `V<name> n+ n- <电压>` |
-| 正弦波发生器 | `V<name> n+ n- SIN(dc ac freq 0 0 phase)` |
+| 正弦波发生器 | `V<name> n+ n- DC <dc> AC <ac> SIN(<dc> <ac> <freq> 0 0 <phase>)` |
 | 音频输入 | `V<name> n+ n- PWL(<44.1kHz PCM 逐点内联>)` |
 | 电压表 | `R<name> n+ n- 10000Meg`（10GΩ 采样，读两端电压差） |
 | 电流表 | `V<name> n+ n- 0`（0V 电压源电流探针，读 `i(v<name>)`） |
@@ -119,6 +147,7 @@ npm run build      # 类型检查 + 产物构建
 | `POST /api` | JSON RPC：`ping` / `list_models` / `build_netlist` / `simulate` |
 | `POST /api/upload` | 上传音频（原始字节 → ffmpeg 转码 → 返回 `{ id, duration }`） |
 | `POST /api/stop` | 提前终止正在运行的仿真 |
+| `POST /api/fft` | 对 tran 波形做 FFT（`{ x, y }` → `{ x: 频率Hz[], y: dB[] }`） |
 | `GET /api/preset/:name` | 返回内嵌预设音符的 WAV（供网页播放） |
 | `GET /ws` | 事件流（`simulation_started` / `simulation_done` / `backend_status` 等） |
 
@@ -131,6 +160,8 @@ npm run build      # 类型检查 + 产物构建
 - **接地**：只有 `gnd` 元件的引脚所在 net 映射到节点 `0`；电池正负极均不自动接地。
 - **器件模型**：`models.lib` 集中管理 `.MODEL` / `.SUBCKT`（已移除 LTspice 专属字段如 `mfg=`、`type=`）。
 - **ngspice 驱动**：CLI 子进程 + `-r` 增量写 rawfile；仿真结果含 `cancelled` 标记，支持优雅取消并保留部分波形。
+- **ac 结果解析**：`-r` 模式下 ac 的 frequency 独立变量带未初始化虚部垃圾值，解析时第 0 列取实部、其余列取模长。
+- **FFT**：rustfft 前向变换，先去直流（均值）再加 Hann 窗；幅度 `4·|X|/N`，dB 为 `20·log10(幅度/√2)`，对数频率轴做 max-pooling 避免窄峰丢失。
 - **音频**：上传或预设音频统一转成 44.1kHz 16-bit 单声道 PCM，运行时转成内联 PWL 电压源。
 - **预设音符**：C/A/G/E/D 示例音频编译期内嵌为 PCM，运行时按需转 PWL 并缓存。
 
@@ -143,3 +174,7 @@ npm run build      # 类型检查 + 产物构建
   - 每一「横排」在左组（或右组）内部横向连通 5 孔 → 30 行 × 2 组 = 60 条 net。
 
 这些几何/连通约定编码在 `frontend/src/layout/breadboardLayout.ts`，网表生成时据此推导电气节点。
+
+## 许可证
+
+GNU GPL v3.0（[LICENSE](LICENSE)）。第三方开源成果声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
