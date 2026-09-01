@@ -35,7 +35,8 @@ pub fn fft_spectrum(x: &[f64], y: &[f64], max_freq: f64) -> Result<(Vec<f64>, Ve
         .map(|i| interp(x, y, t0 + i as f64 * dt))
         .collect();
 
-    // 3) FFT（Hann 窗）
+    // 3) 去直流（均值）后做 FFT（Hann 窗），避免直流分量及其泄漏主导低频
+    let mean = uniform.iter().sum::<f64>() / uniform.len() as f64;
     let n_fft = uniform.len();
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(n_fft);
@@ -44,7 +45,7 @@ pub fn fft_spectrum(x: &[f64], y: &[f64], max_freq: f64) -> Result<(Vec<f64>, Ve
         .enumerate()
         .map(|(i, &s)| {
             let w = 0.5 * (1.0 - (2.0 * PI * i as f64 / (n_fft - 1) as f64).cos());
-            Complex::new(s * w, 0.0)
+            Complex::new((s - mean) * w, 0.0)
         })
         .collect();
     fft.process(&mut buf);
@@ -149,5 +150,32 @@ mod tests {
         }
         assert!((peak_f - 1000.0).abs() < 200.0, "峰值频率 {peak_f}");
         assert!((peak - (-3.0)).abs() < 1.5, "1V 峰值正弦应约 -3dB，实际 {peak}");
+    }
+
+    #[test]
+    fn dc_offset_is_removed() {
+        // 5V 直流偏置 + 0.2V 峰值 1kHz 正弦：直流应被去除，低频不再主导
+        let fs = 100_000.0;
+        let n = 10_000usize;
+        let x: Vec<f64> = (0..n).map(|i| i as f64 / fs).collect();
+        let y: Vec<f64> = x.iter().map(|&t| 5.0 + 0.2 * (2.0 * PI * 1000.0 * t).sin()).collect();
+
+        let (freqs, dbs) = fft_spectrum(&x, &y, 40_000.0).unwrap();
+        // 低频（<100Hz）不应有大的分量
+        let low_max = freqs
+            .iter()
+            .zip(&dbs)
+            .filter(|(f, _)| **f < 100.0)
+            .map(|(_, d)| *d)
+            .fold(-f64::INFINITY, f64::max);
+        assert!(low_max < -60.0, "低频分量应很小，实际 {low_max}dB");
+        // 1kHz 处峰值约 0.2V 峰值 → 0.141V RMS → 约 -17dB
+        let peak = freqs
+            .iter()
+            .zip(&dbs)
+            .filter(|(f, _)| **f > 200.0 && **f < 5000.0)
+            .map(|(_, d)| *d)
+            .fold(-f64::INFINITY, f64::max);
+        assert!((peak - (-17.0)).abs() < 2.0, "0.2V 峰值正弦应约 -17dB，实际 {peak}dB");
     }
 }
