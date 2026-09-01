@@ -187,9 +187,6 @@ app.innerHTML = `
         <button id="scope-download" type="button">下载 WAV</button>
         <button id="scope-close" type="button">关闭</button>
       </div>
-      <div class="modal__actions" id="scope-fft-actions" hidden>
-        <button id="scope-fft-back" type="button">返回</button>
-      </div>
     </div>
   </div>
   <div class="modal" id="sim-options-dialog" hidden>
@@ -604,10 +601,9 @@ const presetList = document.querySelector<HTMLElement>("#preset-list")!;
 const audioPlayBtn = document.querySelector<HTMLButtonElement>("#audio-play")!;
 const scopePlayBtn = document.querySelector<HTMLButtonElement>("#scope-play")!;
 const scopeDownloadBtn = document.querySelector<HTMLButtonElement>("#scope-download")!;
+const scopeCloseBtn = document.querySelector<HTMLButtonElement>("#scope-close")!;
 const scopeFftBtn = document.querySelector<HTMLButtonElement>("#scope-fft")!;
-const scopeActions = document.querySelector<HTMLElement>("#scope-actions")!;
-const scopeFftActions = document.querySelector<HTMLElement>("#scope-fft-actions")!;
-const scopeFftBackBtn = document.querySelector<HTMLButtonElement>("#scope-fft-back")!;
+let fftViewActive = false;
 let audioTargetId: string | null = null;
 let audioPlayUrl: string | null = null;
 let audioPlayer: HTMLAudioElement | null = null;
@@ -951,8 +947,11 @@ function closeScopeDialog(): void {
 
 // —— 示波器 FFT 视图 ——
 function showScopeNormalView(): void {
-  scopeActions.hidden = false;
-  scopeFftActions.hidden = true;
+  fftViewActive = false;
+  scopeFftBtn.textContent = "FFT";
+  scopePlayBtn.hidden = false;
+  scopeDownloadBtn.hidden = false;
+  scopeCloseBtn.hidden = false;
   if (currentScopeTrace) {
     drawScopeTrace(currentScopeTrace);
   }
@@ -968,8 +967,11 @@ async function showFftView(): Promise<void> {
     const spec = await backend.fft(currentScopeTrace.x, currentScopeTrace.y);
     drawFft(spec.x, spec.y);
     scopeHint.textContent = "FFT";
-    scopeActions.hidden = true;
-    scopeFftActions.hidden = false;
+    fftViewActive = true;
+    scopeFftBtn.textContent = "返回";
+    scopePlayBtn.hidden = true;
+    scopeDownloadBtn.hidden = true;
+    scopeCloseBtn.hidden = true;
   } catch (err) {
     setStatusMessage(`FFT 失败：${err instanceof Error ? err.message : String(err)}`);
   }
@@ -1141,9 +1143,12 @@ scopeDialog.addEventListener("click", (e) => {
 });
 
 scopeFftBtn.addEventListener("click", () => {
-  void showFftView();
+  if (fftViewActive) {
+    showScopeNormalView();
+  } else {
+    void showFftView();
+  }
 });
-scopeFftBackBtn.addEventListener("click", showScopeNormalView);
 
 scopePlayBtn.addEventListener("click", () => {
   if (analysisKind !== "tran") {
