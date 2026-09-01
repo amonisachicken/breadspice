@@ -239,6 +239,11 @@ app.innerHTML = `
         <label>预设音符</label>
         <div class="preset-list" id="preset-list"></div>
       </div>
+      <div class="modal__field">
+        <label>输入增益</label>
+        <input id="audio-gain" type="range" min="0" max="100" step="1" value="50" />
+        <span id="audio-gain-label">50%</span>
+      </div>
       <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden />
       <div class="modal__actions">
         <button id="audio-choose" type="button">选择音频文件</button>
@@ -625,6 +630,8 @@ const audioStatus = document.querySelector<HTMLElement>("#audio-status")!;
 const audioFileInput = document.querySelector<HTMLInputElement>("#audio-file")!;
 const presetList = document.querySelector<HTMLElement>("#preset-list")!;
 const audioPlayBtn = document.querySelector<HTMLButtonElement>("#audio-play")!;
+const audioGain = document.querySelector<HTMLInputElement>("#audio-gain")!;
+const audioGainLabel = document.querySelector<HTMLElement>("#audio-gain-label")!;
 const scopePlayBtn = document.querySelector<HTMLButtonElement>("#scope-play")!;
 const scopeDownloadBtn = document.querySelector<HTMLButtonElement>("#scope-download")!;
 const scopeCloseBtn = document.querySelector<HTMLButtonElement>("#scope-close")!;
@@ -806,6 +813,11 @@ function openAudioDialog(id: string): void {
   } else {
     audioStatus.textContent = "未上传音频（上传后作为电压源输入）";
   }
+  // 输入增益：默认 50%（衰减为 PCM 电压的 1/2），存为小数因子
+  const gain = Number(ins?.params?.gain ?? "0.5");
+  const percent = Number.isFinite(gain) ? Math.round(gain * 100) : 50;
+  audioGain.value = String(percent);
+  audioGainLabel.textContent = `${percent}%`;
   audioDialog.hidden = false;
 }
 
@@ -1173,6 +1185,16 @@ audioFileInput.addEventListener("change", () => {
 document.querySelector<HTMLButtonElement>("#audio-close")!.addEventListener("click", closeAudioDialog);
 audioDialog.addEventListener("click", (e) => {
   if (e.target === audioDialog) closeAudioDialog();
+});
+
+audioGain.addEventListener("input", () => {
+  const percent = Number(audioGain.value) || 0;
+  audioGainLabel.textContent = `${percent}%`;
+  if (audioTargetId) {
+    commitUpdate(audioTargetId, (ins) => {
+      ins.params = { ...(ins.params ?? {}), gain: (percent / 100).toFixed(3) };
+    });
+  }
 });
 
 audioPlayBtn.addEventListener("click", () => {

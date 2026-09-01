@@ -151,6 +151,28 @@ fn param_or<'a>(
         .unwrap_or(default)
 }
 
+/// 把 PWL 主体（"t0 v0 t1 v1 ..."）里的每个电压值乘以增益（偶数下标为时间，奇数下标为电压）。
+fn scale_pwl(pwl: &str, gain: f64) -> String {
+    if gain == 1.0 {
+        return pwl.to_string();
+    }
+    let mut out = String::with_capacity(pwl.len());
+    for (i, tok) in pwl.split_whitespace().enumerate() {
+        if i > 0 {
+            out.push(' ');
+        }
+        if i % 2 == 1 {
+            match tok.parse::<f64>() {
+                Ok(v) => out.push_str(&format!("{:.6}", v * gain)),
+                Err(_) => out.push_str(tok),
+            }
+        } else {
+            out.push_str(tok);
+        }
+    }
+    out
+}
+
 /// 解析电路的地网集合（映射到 ngspice 节点 0）。
 ///
 /// 只有显式接地元件（`gnd`）能定义地：每个 Gnd 引脚所在 net 都接地。
@@ -232,7 +254,7 @@ fn build_device_line(
         ComponentKind::Voltmeter => format!("{prefix}{refdes} {n0} {n1} 10000Meg"),
         // 电流表：0V 电压源作为电流探针，后端读 i(v<refdes>)
         ComponentKind::Ammeter => format!("{prefix}{refdes} {n0} {n1} 0"),
-        // 音频输入：内联 PWL 电压源（params.audio = 注册表 id）
+        // 音频输入：内联 PWL 电压源（params.audio = 注册表 id，params.gain = 增益因子，默认 0.5）
         ComponentKind::Audio => {
             let pwl = comp
                 .params
@@ -243,7 +265,10 @@ fn build_device_line(
             if pwl.is_empty() {
                 format!("* audio {refdes}: 未上传音频（占位）")
             } else {
-                format!("{prefix}{refdes} {n0} {n1} PWL({pwl})")
+                let gain: f64 = param_or(comp.params.as_ref(), "gain", "0.5")
+                    .parse()
+                    .unwrap_or(0.5);
+                format!("{prefix}{refdes} {n0} {n1} PWL({})", scale_pwl(&pwl, gain))
             }
         }
         // 示波器：不产生器件，仅记录探针节点，后端读 raw 波形
@@ -783,5 +808,16 @@ mod tests {
         let end_idx = netlist.text.rfind(".end").unwrap();
         let subckt_idx = netlist.text.find(".SUBCKT OP07A").unwrap();
         assert!(subckt_idx < end_idx);
+    }
+
+    #[test]
+    fn scale_pwl_scales_voltage_tokens_only() {
+        let pwl = "0.000000000 1.000000 0.000022676 -0.500000 0.000045352 0.250000";
+        assert_eq!(
+            scale_pwl(pwl, 0.5),
+            "0.000000000 0.500000 0.000022676 -0.250000 0.000045352 0.125000"
+        );
+        // 增益为 1 时原样返回（避免无谓重格式化）
+        assert_eq!(scale_pwl(pwl, 1.0), pwl);
     }
 }
