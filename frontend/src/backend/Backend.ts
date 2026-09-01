@@ -46,6 +46,9 @@ export interface Backend {
   /** 提前终止正在运行的仿真。 */
   stopSimulation(): Promise<void>;
 
+  /** 对 tran 波形做 FFT，返回 { x: 频率Hz[], y: dB[] }。 */
+  fft(x: number[], y: number[]): Promise<{ x: number[]; y: number[] }>;
+
   /**
    * 订阅后端主动推送的事件（进度、实时波形、状态变化）。
    * @returns 取消订阅函数。

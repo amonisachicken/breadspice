@@ -11,6 +11,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
+rustfft = "6"
 
 # 后续按需添加：
 # - libngspice FFI：无需额外 crate，用 build.rs 探测并链接 libngspice

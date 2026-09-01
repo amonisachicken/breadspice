@@ -265,6 +265,10 @@ export class MockBackend implements Backend {
     // Mock 后端无真实仿真，无需处理
   }
 
+  async fft(): Promise<{ x: number[]; y: number[] }> {
+    throw new Error("Mock 后端不支持 FFT，请切换到真实后端");
+  }
+
   on<K extends BackendEventName>(
     event: K,
     handler: (payload: Extract<BackendEvent, { kind: K }>) => void,

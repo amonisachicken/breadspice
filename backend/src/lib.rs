@@ -8,12 +8,14 @@
 //! - [`models`]：ngspice 器件模型库（`.MODEL` / `.SUBCKT`）；
 //! - [`audio`]：音频输入（ffmpeg 转码 + PCM → PWL）；
 //! - [`presets`]：内嵌预设音频（C/A/G/E/D 音符 PCM）；
+//! - [`fft`]：示波器 FFT（RustFFT）；
 //! - [`netlist`]：把电路布局编译为 ngspice 网表；
 //! - [`ngspice`]：ngspice 驱动接口（CLI / FFI）；
 //! - [`server`]：HTTP/WebSocket 服务（/api RPC + /ws 事件流）。
 
 pub mod audio;
 pub mod domain;
+pub mod fft;
 pub mod models;
 pub mod netlist;
 pub mod ngspice;

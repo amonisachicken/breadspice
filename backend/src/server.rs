@@ -48,6 +48,7 @@ pub fn router() -> Router {
         .route("/api", post(handle_api))
         .route("/api/upload", post(handle_upload))
         .route("/api/stop", post(handle_stop))
+        .route("/api/fft", post(handle_fft))
         .route("/api/preset/:name", get(handle_preset))
         .route("/ws", get(handle_ws))
         .with_state(state)
@@ -79,6 +80,20 @@ async fn handle_preset(Path(name): Path<String>) -> impl IntoResponse {
     match crate::presets::preset_wav(&name) {
         Some(wav) => ([(header::CONTENT_TYPE, "audio/wav")], wav).into_response(),
         None => (StatusCode::NOT_FOUND, "preset not found").into_response(),
+    }
+}
+
+/// 示波器 FFT：输入波形 (x=时间, y=电压)，返回频谱 (x=频率 Hz, y=dB)。
+async fn handle_fft(Json(req): Json<serde_json::Value>) -> (StatusCode, Json<serde_json::Value>) {
+    let to_vec = |k: &str| -> Option<Vec<f64>> {
+        req.get(k)?.as_array().map(|a| a.iter().filter_map(|v| v.as_f64()).collect())
+    };
+    let (Some(x), Some(y)) = (to_vec("x"), to_vec("y")) else {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "缺少 x/y 数组" })));
+    };
+    match crate::fft::fft_spectrum(&x, &y, 40_000.0) {
+        Ok((fx, fy)) => (StatusCode::OK, Json(serde_json::json!({ "x": fx, "y": fy }))),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
     }
 }
 

@@ -80,6 +80,26 @@ export class HttpBackend implements Backend {
     await fetch(`${this.apiUrl}/stop`, { method: "POST" }).catch(() => undefined);
   }
 
+  async fft(x: number[], y: number[]): Promise<{ x: number[]; y: number[] }> {
+    let resp: Response;
+    try {
+      resp = await fetch(`${this.apiUrl}/fft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y }),
+      });
+    } catch (err) {
+      throw new Error(
+        `无法连接后端（${err instanceof Error ? err.message : String(err)}），请先在 backend 目录运行 cargo run`,
+      );
+    }
+    if (!resp.ok) {
+      const data = (await resp.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(`FFT 失败：${data?.error ?? `HTTP ${resp.status}`}`);
+    }
+    return (await resp.json()) as { x: number[]; y: number[] };
+  }
+
   on<K extends BackendEventName>(
     event: K,
     handler: (payload: Extract<BackendEvent, { kind: K }>) => void,

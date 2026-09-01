@@ -116,20 +116,9 @@ export function scopeTrace(
   return result.traces.find((t) => t.name.toLowerCase() === key) ?? null;
 }
 
-/** 找交流分析信号源（第一个 vsine）的 "+" 引脚所在 net。 */
-export function findSourceNet(circuit: Circuit): NetId | undefined {
-  for (const comp of circuit.components) {
-    if (comp.kind === "vsine") {
-      const net = pinNetId(circuit, comp, "+");
-      if (net !== undefined) return net;
-    }
-  }
-  return undefined;
-}
-
 /**
  * 示波器要显示的曲线：tran/dc 直接返回探针波形；ac 时转成 dB 频响
- * （以信号源为 0dB 参考：20·log10(|V_probe| / |V_source|)）。
+ * （规定 1V RMS = 0dB，交流电压按有效值算，不再以信号源为参照）。
  */
 export function scopeTraceForAnalysis(
   circuit: Circuit,
@@ -140,15 +129,9 @@ export function scopeTraceForAnalysis(
   const probe = scopeTrace(circuit, ins, result);
   if (!probe || analysis !== "ac") return probe;
 
-  const sourceNet = findSourceNet(circuit);
-  if (sourceNet === undefined) return probe;
-  const source = result.traces?.find((t) => t.name.toLowerCase() === voltageKey(sourceNet));
-  if (!source) return probe;
-
-  const y = probe.y.map((v, i) => {
-    const s = source.y[i] ?? 0;
-    if (s === 0 || v === 0) return -Infinity;
-    return 20 * Math.log10(Math.abs(v) / Math.abs(s));
+  const y = probe.y.map((v) => {
+    const rms = Math.abs(v) / Math.SQRT2;
+    return rms <= 0 ? -Infinity : 20 * Math.log10(rms);
   });
   return { name: `${probe.name} (dB)`, x: probe.x.slice(), y };
 }

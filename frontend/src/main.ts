@@ -181,10 +181,14 @@ app.innerHTML = `
         </svg>
         <span class="scope-hint" id="scope-hint">等待仿真</span>
       </div>
-      <div class="modal__actions">
+      <div class="modal__actions" id="scope-actions">
+        <button id="scope-fft" type="button">FFT</button>
         <button id="scope-play" type="button">▶ 播放</button>
         <button id="scope-download" type="button">下载 WAV</button>
         <button id="scope-close" type="button">关闭</button>
+      </div>
+      <div class="modal__actions" id="scope-fft-actions" hidden>
+        <button id="scope-fft-back" type="button">返回</button>
       </div>
     </div>
   </div>
@@ -600,6 +604,10 @@ const presetList = document.querySelector<HTMLElement>("#preset-list")!;
 const audioPlayBtn = document.querySelector<HTMLButtonElement>("#audio-play")!;
 const scopePlayBtn = document.querySelector<HTMLButtonElement>("#scope-play")!;
 const scopeDownloadBtn = document.querySelector<HTMLButtonElement>("#scope-download")!;
+const scopeFftBtn = document.querySelector<HTMLButtonElement>("#scope-fft")!;
+const scopeActions = document.querySelector<HTMLElement>("#scope-actions")!;
+const scopeFftActions = document.querySelector<HTMLElement>("#scope-fft-actions")!;
+const scopeFftBackBtn = document.querySelector<HTMLButtonElement>("#scope-fft-back")!;
 let audioTargetId: string | null = null;
 let audioPlayUrl: string | null = null;
 let audioPlayer: HTMLAudioElement | null = null;
@@ -830,10 +838,15 @@ function closeMeterDialog(): void {
 // —— 示波器屏幕对话框 ——
 function openScopeDialog(id: string): void {
   scopeDialog.hidden = false;
+  // 每次打开都回到普通波形视图
+  showScopeNormalView();
   // 仅 tran 结果可导出/播放为 WAV（其余分析类型灰显，避免卡死）
   const canExport = analysisKind === "tran";
   scopeDownloadBtn.disabled = !canExport;
   scopePlayBtn.disabled = !canExport;
+  // FFT 按钮：仅当信号源为正弦波发生器且 tran 仿真时显示
+  const hasVsine = getPlaced().some((p) => p.instance.kind === "vsine");
+  scopeFftBtn.hidden = !(analysisKind === "tran" && hasVsine);
   const ins = getPlacedItem(id)?.instance;
   const trace =
     ins && lastSimCircuit && lastSimResult
@@ -934,6 +947,75 @@ function clearScopeAxes(): void {
 
 function closeScopeDialog(): void {
   scopeDialog.hidden = true;
+}
+
+// —— 示波器 FFT 视图 ——
+function showScopeNormalView(): void {
+  scopeActions.hidden = false;
+  scopeFftActions.hidden = true;
+  if (currentScopeTrace) {
+    drawScopeTrace(currentScopeTrace);
+  }
+}
+
+async function showFftView(): Promise<void> {
+  if (!currentScopeTrace || currentScopeTrace.x.length < 4) {
+    setStatusMessage("暂无波形可做 FFT");
+    return;
+  }
+  setStatusMessage("正在计算 FFT…");
+  try {
+    const spec = await backend.fft(currentScopeTrace.x, currentScopeTrace.y);
+    drawFft(spec.x, spec.y);
+    scopeHint.textContent = "FFT";
+    scopeActions.hidden = true;
+    scopeFftActions.hidden = false;
+  } catch (err) {
+    setStatusMessage(`FFT 失败：${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function drawFft(freqs: number[], dbs: number[]): void {
+  const margin = 8;
+  const w = 300;
+  const h = 180;
+  const logF = freqs.map((f) => Math.log10(Math.max(f, 1e-6)));
+  let minL = Infinity;
+  let maxL = -Infinity;
+  let minDb = Infinity;
+  let maxDb = -Infinity;
+  for (const lf of logF) {
+    if (lf < minL) minL = lf;
+    if (lf > maxL) maxL = lf;
+  }
+  for (const db of dbs) {
+    if (db < minDb) minDb = db;
+    if (db > maxDb) maxDb = db;
+  }
+  const spanL = maxL - minL || 1;
+  const spanDb = maxDb - minDb || 1;
+  const pts: string[] = [];
+  for (let i = 0; i < freqs.length; i++) {
+    const nx = margin + ((logF[i] - minL) / spanL) * (w - 2 * margin);
+    const ny = h - margin - ((dbs[i] - minDb) / spanDb) * (h - 2 * margin);
+    pts.push(`${nx.toFixed(2)},${ny.toFixed(2)}`);
+  }
+  scopeTraceEl.setAttribute("points", pts.join(" "));
+  // 轴标注：x=频率(log)，y=dB
+  const fmin = freqs[0];
+  const fmax = freqs[freqs.length - 1];
+  const fmid = Math.sqrt(fmin * fmax);
+  axXMin.textContent = formatEng(fmin) + "Hz";
+  axXMid.textContent = formatEng(fmid) + "Hz";
+  axXMax.textContent = formatEng(fmax) + "Hz";
+  axYMax.textContent = fmtDb(maxDb);
+  axYMid.textContent = fmtDb((minDb + maxDb) / 2);
+  axYMin.textContent = fmtDb(minDb);
+}
+
+function fmtDb(v: number): string {
+  if (!Number.isFinite(v)) return v === -Infinity ? "-∞" : String(v);
+  return String(Number(v.toPrecision(4))) + "dB";
 }
 
 document.querySelector<HTMLButtonElement>("#value-ok")!.addEventListener("click", () => {
@@ -1038,6 +1120,11 @@ document.querySelector<HTMLButtonElement>("#scope-close")!.addEventListener("cli
 scopeDialog.addEventListener("click", (e) => {
   if (e.target === scopeDialog) closeScopeDialog();
 });
+
+scopeFftBtn.addEventListener("click", () => {
+  void showFftView();
+});
+scopeFftBackBtn.addEventListener("click", showScopeNormalView);
 
 scopePlayBtn.addEventListener("click", () => {
   if (analysisKind !== "tran") {
