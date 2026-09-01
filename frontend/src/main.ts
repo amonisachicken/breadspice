@@ -195,8 +195,9 @@ app.innerHTML = `
       <div class="modal__field">
         <label>分析类型</label>
         <select id="sim-analysis">
-          <option value="op">工作点（op）</option>
-          <option value="dc">直流扫描（dc）</option>
+          <!-- op / dc 暂未开放入口，先隐藏（相关前后端代码保留，留待日后启用） -->
+          <option value="op" hidden>工作点（op）</option>
+          <option value="dc" hidden>直流扫描（dc）</option>
           <option value="ac">交流分析（ac）</option>
           <option value="tran">瞬态分析（tran）</option>
         </select>
