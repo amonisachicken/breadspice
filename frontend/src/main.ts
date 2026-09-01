@@ -309,6 +309,7 @@ const backend = getBackend();
 // —— 仿真状态 ——
 let analysisKind: AnalysisKind = "tran";
 let simParams: Record<string, unknown> = { step: 1e-5, start: 0.19, duration: 0.01 };
+let simParamsCustom = false;
 let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
 let currentScopeTrace: Trace | null = null;
@@ -598,6 +599,7 @@ const audioFileInput = document.querySelector<HTMLInputElement>("#audio-file")!;
 const presetList = document.querySelector<HTMLElement>("#preset-list")!;
 const audioPlayBtn = document.querySelector<HTMLButtonElement>("#audio-play")!;
 const scopePlayBtn = document.querySelector<HTMLButtonElement>("#scope-play")!;
+const scopeDownloadBtn = document.querySelector<HTMLButtonElement>("#scope-download")!;
 let audioTargetId: string | null = null;
 let audioPlayUrl: string | null = null;
 let audioPlayer: HTMLAudioElement | null = null;
@@ -828,6 +830,10 @@ function closeMeterDialog(): void {
 // —— 示波器屏幕对话框 ——
 function openScopeDialog(id: string): void {
   scopeDialog.hidden = false;
+  // 仅 tran 结果可导出/播放为 WAV（其余分析类型灰显，避免卡死）
+  const canExport = analysisKind === "tran";
+  scopeDownloadBtn.disabled = !canExport;
+  scopePlayBtn.disabled = !canExport;
   const ins = getPlacedItem(id)?.instance;
   const trace =
     ins && lastSimCircuit && lastSimResult
@@ -1034,6 +1040,10 @@ scopeDialog.addEventListener("click", (e) => {
 });
 
 scopePlayBtn.addEventListener("click", () => {
+  if (analysisKind !== "tran") {
+    setStatusMessage("仅 tran 仿真结果可播放为音频");
+    return;
+  }
   if (currentScopeTrace) {
     const blob = traceToWavBlob(currentScopeTrace);
     playAudio(URL.createObjectURL(blob));
@@ -1042,7 +1052,11 @@ scopePlayBtn.addEventListener("click", () => {
   }
 });
 
-document.querySelector<HTMLButtonElement>("#scope-download")!.addEventListener("click", () => {
+scopeDownloadBtn.addEventListener("click", () => {
+  if (analysisKind !== "tran") {
+    setStatusMessage("仅 tran 仿真结果可导出为 WAV");
+    return;
+  }
   if (currentScopeTrace) {
     downloadTraceAsWav(currentScopeTrace, `scope-${currentScopeTrace.name.replace(/[^A-Za-z0-9_.-]/g, "_")}.wav`);
     setStatusMessage("已导出 WAV");
@@ -1189,9 +1203,12 @@ async function runSimulation(): Promise<void> {
     setStatusMessage("电路为空，请先拖入元件");
     return;
   }
-  // 含音频输入时只允许 tran 仿真
+  // 含音频输入时只允许 tran 仿真；未自定义参数时默认 0s 开始、持续 1s
   if (circuit.components.some((c) => c.kind === "audio")) {
     analysisKind = "tran";
+    if (!simParamsCustom) {
+      simParams = { step: 1e-5, start: 0, duration: 1 };
+    }
   }
   setStatusMessage(`仿真中（${analysisKind}）…`);
   simulating = true;
@@ -1290,6 +1307,11 @@ function openSimOptions(): void {
   } else {
     simAnalysis.value = analysisKind;
   }
+  // 同步 tran 字段（音频时默认 0s 开始、持续 1s）
+  const tp = simParams as { step?: number; start?: number; duration?: number };
+  simTranStep.value = String(tp.step ?? 1e-5);
+  simTranStart.value = String(tp.start ?? (hasAudio ? 0 : 0.19));
+  simTranDuration.value = String(tp.duration ?? (hasAudio ? 1 : 0.01));
   // 直流扫描源默认填第一个电压源器件名（如 VB1）
   const firstSource = getPlaced().find(
     (p) => p.instance.kind === "power" || p.instance.kind === "vsine",
@@ -1331,6 +1353,7 @@ function applySimOptions(): void {
   } else {
     simParams = {};
   }
+  simParamsCustom = true;
   closeSimOptions();
 }
 
