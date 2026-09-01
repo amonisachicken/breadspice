@@ -144,7 +144,7 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       const ac = p.ac ?? "0.2";
       const freq = p.freq ?? "1k";
       const phase = p.phase ?? "0";
-      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} SIN(${dc} ${ac} ${freq} 0 0 ${phase})`;
+      line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} DC ${dc} AC ${ac} SIN(${dc} ${ac} ${freq} 0 0 ${phase})`;
     } else if (comp.kind === "voltmeter") {
       // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} 10000Meg`;

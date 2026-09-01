@@ -140,15 +140,20 @@ enum Section {
     Values,
 }
 
-/// 解析单个数值；`complex` 时接受 `re,im` 并返回模长。
-fn parse_value(token: &str, flags: &str) -> Result<f64, String> {
+/// 解析单个数值；`complex` 时接受 `re,im`。独立变量（index_in_point == 0，如 ac 的
+/// frequency）取实部（`-r` 模式下其虚部为未初始化垃圾值），其余取模长。
+fn parse_value(token: &str, flags: &str, index_in_point: usize) -> Result<f64, String> {
     if flags == "complex" {
         let (re, im) = token
             .split_once(',')
             .ok_or_else(|| format!("非法复数 {token}"))?;
         let re: f64 = re.trim().parse().map_err(|_| format!("非法实部 {re}"))?;
         let im: f64 = im.trim().parse().map_err(|_| format!("非法虚部 {im}"))?;
-        Ok((re * re + im * im).sqrt())
+        if index_in_point == 0 {
+            Ok(re)
+        } else {
+            Ok((re * re + im * im).sqrt())
+        }
     } else {
         token.parse::<f64>().map_err(|_| format!("非法数值 {token}"))
     }
@@ -161,6 +166,7 @@ fn parse_rawfile(text: &str) -> Result<ParsedRaw, String> {
     let mut values: Vec<f64> = Vec::new();
 
     let mut section = Section::Header;
+    let mut value_count = 0usize;
     for line in text.lines() {
         match section {
             Section::Header => {
@@ -193,7 +199,9 @@ fn parse_rawfile(text: &str) -> Result<ParsedRaw, String> {
                     .split_whitespace()
                     .last()
                     .ok_or_else(|| "rawfile Values 行为空".to_string())?;
-                values.push(parse_value(token, &flags)?);
+                let idx = value_count % n_vars.max(1);
+                values.push(parse_value(token, &flags, idx)?);
+                value_count += 1;
             }
         }
     }
@@ -470,6 +478,32 @@ Values:
         assert!((traces[0].y[0] - 5.0).abs() < 1e-9);
     }
 
+    /// `-r` 模式下 ac 的 frequency 变量带未初始化虚部垃圾值，应取实部。
+    #[test]
+    fn ac_frequency_uses_real_part() {
+        let raw = "\
+Title: ac
+Plotname: AC Analysis
+Flags: complex
+No. Variables: 2
+No. Points: 1
+Variables:
+\t0\tfrequency\tfrequency grid=3
+\t1\tv(out)\tvoltage
+Values:
+ 0\t2.000000000000000e+01,1.738308331656823e+142
+\t2.000000000000000e-01,0.000000000000000e+00
+";
+        let parsed = parse_rawfile(raw).unwrap();
+        let result = parsed.into_simulation_result(AnalysisKind::Ac);
+        let traces = result.traces.unwrap();
+        assert_eq!(traces[0].name, "v(out)");
+        // 频率取实部 20，忽略垃圾虚部
+        assert_eq!(traces[0].x, vec![20.0]);
+        // v(out) = 0.2 + 0j → 模长 0.2
+        assert!((traces[0].y[0] - 0.2).abs() < 1e-12);
+    }
+
     /// 真跑 ngspice：电压分压器 op + tran（找不到 ngspice 时自动跳过）。
     #[test]
     fn real_ngspice_op_and_tran() {
@@ -502,6 +536,38 @@ Values:
         assert!(tran.ok);
         let traces = tran.traces.as_ref().unwrap();
         assert!(traces.iter().any(|t| t.name == "v(out)"));
+    }
+
+    /// 端到端：ac 分析应产出非零幅值，且 frequency 轴取实部（回归：AC 关键字缺失 / 频率垃圾虚部）。
+    #[test]
+    fn real_ngspice_ac_nonzero_magnitude() {
+        if Command::new("ngspice").arg("--version").output().is_err() {
+            eprintln!("跳过：未找到 ngspice");
+            return;
+        }
+        // vsine 带 DC/AC，1k/1k 分压：v(out) 应为 0.5（AC=1）。
+        let netlist = Netlist {
+            text: "* ac divider\nV1 in 0 DC 0 AC 1 SIN(0 1 1k 0 0 0)\nR1 in out 1k\nR2 out 0 1k\n.end\n"
+                .to_string(),
+            devices: Vec::new(),
+        };
+        let mut spice = CliNgspice::new();
+        let ac = spice
+            .run(
+                &netlist,
+                AnalysisKind::Ac,
+                &AnalysisParams::Ac { sweep: AcSweep::Dec, points: 10, start: 1.0, stop: 1e6 },
+            )
+            .unwrap();
+        assert!(ac.ok, "ac 失败：{:?}", ac.error);
+        let traces = ac.traces.as_ref().expect("ac 应有 traces");
+        let vout = traces.iter().find(|t| t.name == "v(out)").expect("应有 v(out)");
+        // x 轴频率应单调递增且为正（垃圾虚部被剔除）
+        assert!(vout.x.iter().all(|f| f.is_finite() && *f > 0.0), "频率轴异常：{:?}", &vout.x[..8.min(vout.x.len())]);
+        assert!(vout.x.windows(2).all(|w| w[1] > w[0]), "频率轴应单调递增");
+        // 幅值非零（约 0.5）
+        let max_amp = vout.y.iter().cloned().fold(0.0f64, f64::max);
+        assert!((max_amp - 0.5).abs() < 1e-6, "v(out) 幅值应为 0.5，实际 {max_amp}");
     }
 
     /// 端到端：build_netlist（含 GND 元件接地）-> ngspice op。

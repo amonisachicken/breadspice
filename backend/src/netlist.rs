@@ -226,7 +226,7 @@ fn build_device_line(
             let ac = param_or(params, "ac", "0.2");
             let freq = param_or(params, "freq", "1k");
             let phase = param_or(params, "phase", "0");
-            format!("{prefix}{refdes} {n0} {n1} SIN({dc} {ac} {freq} 0 0 {phase})")
+            format!("{prefix}{refdes} {n0} {n1} DC {dc} AC {ac} SIN({dc} {ac} {freq} 0 0 {phase})")
         }
         // 电压表：10000MΩ 采样电阻，后端读两端节点电压差
         ComponentKind::Voltmeter => format!("{prefix}{refdes} {n0} {n1} 10000Meg"),
@@ -583,7 +583,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "VS1 n_rail_Lp n_rail_Lm SIN(0 1 1k 0 0 0)",
+                "VS1 n_rail_Lp n_rail_Lm DC 0 AC 1 SIN(0 1 1k 0 0 0)",
                 "RVM1 n_t1R n_rail_Lm 10000Meg",
                 "VA1 n_t1R n_rail_Lm 0",
                 "RW1 n_t1L n_t1L 0.001",
