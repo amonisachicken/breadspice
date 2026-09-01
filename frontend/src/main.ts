@@ -753,7 +753,7 @@ function openComponentDialog(id: string): void {
 function openSineDialog(id: string, params: Record<string, string>): void {
   sineTargetId = id;
   sineFreq.value = params.freq ?? "1k";
-  sineAc.value = params.ac ?? "1";
+  sineAc.value = params.ac ?? "0.2";
   sineDc.value = params.dc ?? "0";
   sinePhase.value = params.phase ?? "0";
   sineDialog.hidden = false;
@@ -985,7 +985,7 @@ document.querySelector<HTMLButtonElement>("#sine-ok")!.addEventListener("click",
   commitUpdate(sineTargetId, (ins) => {
     ins.params = {
       freq: sineFreq.value.trim() || "1k",
-      ac: sineAc.value.trim() || "1",
+      ac: sineAc.value.trim() || "0.2",
       dc: sineDc.value.trim() || "0",
       phase: sinePhase.value.trim() || "0",
     };

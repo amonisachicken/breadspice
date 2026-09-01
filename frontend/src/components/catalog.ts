@@ -571,7 +571,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "+", x: 0, y: -9, dx: 0, dy: -1, length: 27 },
       { name: "−", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
     ],
-    params: { freq: "1k", ac: "1", dc: "0", phase: "0" },
+    params: { freq: "1k", ac: "0.2", dc: "0", phase: "0" },
     info: "正弦波发生器\n双击设置频率/交流电压/直流电压/相位\n后端映射为 ngspice 正弦电压源（SIN）",
   },
 

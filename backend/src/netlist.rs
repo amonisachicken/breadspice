@@ -223,7 +223,7 @@ fn build_device_line(
         ComponentKind::Vsine => {
             let params = comp.params.as_ref();
             let dc = param_or(params, "dc", "0");
-            let ac = param_or(params, "ac", "1");
+            let ac = param_or(params, "ac", "0.2");
             let freq = param_or(params, "freq", "1k");
             let phase = param_or(params, "phase", "0");
             format!("{prefix}{refdes} {n0} {n1} SIN({dc} {ac} {freq} 0 0 {phase})")

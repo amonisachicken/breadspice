@@ -141,7 +141,7 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       // 正弦电压源：V<name> <+> <-> SIN(dc ac freq 0 0 phase)
       const p = comp.params ?? {};
       const dc = p.dc ?? "0";
-      const ac = p.ac ?? "1";
+      const ac = p.ac ?? "0.2";
       const freq = p.freq ?? "1k";
       const phase = p.phase ?? "0";
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} SIN(${dc} ${ac} ${freq} 0 0 ${phase})`;
