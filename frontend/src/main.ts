@@ -979,6 +979,23 @@ function drawFft(freqs: number[], dbs: number[]): void {
   const margin = 8;
   const w = 300;
   const h = 180;
+  // 过滤非有限值（防御后端异常，避免 null/NaN 破坏渲染）
+  const validF: number[] = [];
+  const validD: number[] = [];
+  for (let i = 0; i < freqs.length; i++) {
+    if (Number.isFinite(freqs[i]) && Number.isFinite(dbs[i])) {
+      validF.push(freqs[i]);
+      validD.push(dbs[i]);
+    }
+  }
+  if (validF.length === 0) {
+    scopeTraceEl.setAttribute("points", "");
+    clearScopeAxes();
+    scopeHint.textContent = "FFT（无有效数据）";
+    return;
+  }
+  freqs = validF;
+  dbs = validD;
   const logF = freqs.map((f) => Math.log10(Math.max(f, 1e-6)));
   let minL = Infinity;
   let maxL = -Infinity;
@@ -1014,7 +1031,9 @@ function drawFft(freqs: number[], dbs: number[]): void {
 }
 
 function fmtDb(v: number): string {
-  if (!Number.isFinite(v)) return v === -Infinity ? "-∞" : String(v);
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
+  if (v === -Infinity) return "-∞";
+  if (v === Infinity) return "∞";
   return String(Number(v.toPrecision(4))) + "dB";
 }
 

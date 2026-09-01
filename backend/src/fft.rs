@@ -87,6 +87,11 @@ pub fn fft_spectrum(x: &[f64], y: &[f64], max_freq: f64) -> Result<(Vec<f64>, Ve
             let idx_lo =
                 ((f_lo / sample_rate * n_fft as f64).ceil() as usize).min(dbs.len().saturating_sub(1));
             let idx_hi = ((f_hi / sample_rate * n_fft as f64).floor() as usize).min(dbs.len() - 1);
+            if idx_lo > idx_hi {
+                // 对数 bin 比一个线性 bin 还窄（低频端）：取最近 bin，避免空区间产生 -Infinity
+                let idx = ((f / sample_rate * n_fft as f64).round() as usize).min(dbs.len() - 1);
+                return dbs[idx];
+            }
             let mut m = -f64::INFINITY;
             for k in idx_lo..=idx_hi {
                 if dbs[k] > m {
@@ -177,5 +182,18 @@ mod tests {
             .map(|(_, d)| *d)
             .fold(-f64::INFINITY, f64::max);
         assert!((peak - (-17.0)).abs() < 2.0, "0.2V 峰值正弦应约 -17dB，实际 {peak}dB");
+    }
+
+    #[test]
+    fn output_is_finite() {
+        // 带直流偏置的波形：输出频谱不应含 NaN / -Infinity（此前低频空区间会产出 -Infinity）
+        let fs = 100_000.0;
+        let n = 10_000usize;
+        let x: Vec<f64> = (0..n).map(|i| i as f64 / fs).collect();
+        let y: Vec<f64> = x.iter().map(|&t| 3.0 + 0.2 * (2.0 * PI * 1000.0 * t).sin()).collect();
+        let (freqs, dbs) = fft_spectrum(&x, &y, 40_000.0).unwrap();
+        for (f, d) in freqs.iter().zip(&dbs) {
+            assert!(f.is_finite() && d.is_finite(), "f={f} d={d} 应为有限值");
+        }
     }
 }
