@@ -316,8 +316,33 @@ let lastSimResult: SimulationResult | null = null;
 let lastSimCircuit: Circuit | null = null;
 let currentScopeTrace: Trace | null = null;
 let simulating = false;
+/** 上一次的输入信号源类型（用于检测 vsine ↔ audio 切换并重置 tran 参数）。 */
+let lastSourceKind: "none" | "vsine" | "audio" = "none";
+
+/** 当前电路的输入信号源类型（音频优先，其次正弦波发生器，否则 none）。 */
+function signalSourceKind(): "none" | "vsine" | "audio" {
+  const kinds = getPlaced().map((p) => p.instance.kind);
+  if (kinds.includes("audio")) return "audio";
+  if (kinds.includes("vsine")) return "vsine";
+  return "none";
+}
+
+/** 按信号源类型重置 tran 参数为对应默认值（清除自定义标记）。 */
+function resetTranDefaults(kind: "vsine" | "audio"): void {
+  if (kind === "audio") {
+    simParams = { step: 1e-5, start: 0, duration: 1 };
+  } else {
+    simParams = { step: 1e-5, start: 0.19, duration: 0.01 };
+  }
+  simParamsCustom = false;
+}
 
 subscribe(() => {
+  const kind = signalSourceKind();
+  if (kind !== lastSourceKind) {
+    if (kind === "audio" || kind === "vsine") resetTranDefaults(kind);
+    lastSourceKind = kind;
+  }
   updateStatus();
   render();
 });
