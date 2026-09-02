@@ -344,23 +344,30 @@ function numOr(raw: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/** 音频默认 tran 时长：取已放置音频的实际时长，未知则回退 1s。 */
-function audioDefaultDuration(): number {
+/** 音频实际时长（秒）；未上传/未选预设时返回 null。 */
+function audioActualDuration(): number | null {
   const audio = getPlaced().find((p) => p.instance.kind === "audio");
   const raw = audio?.instance.params?.duration;
-  if (raw !== undefined) {
-    const n = Number(raw);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return 1;
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** tran 默认参数：音频用 0s 开始 + 实际时长，其余用 0.19s 开始 + 0.01s 持续。 */
+/** 若 tran 时长超出音频剩余长度，收缩到（音频实际时长 - 开始时间）。 */
+function clampAudioDuration(start: number, duration: number): number {
+  const len = audioActualDuration();
+  if (len === null) return duration;
+  const maxDur = len - start;
+  if (maxDur <= 0) return 0;
+  return Math.min(duration, maxDur);
+}
+
+/** tran 默认参数：音频用 0s 开始 + 1s 持续，其余用 0.19s 开始 + 0.01s 持续。 */
 function tranDefaults(hasAudio: boolean): { step: number; start: number; duration: number } {
   return {
     step: 1e-5,
     start: hasAudio ? 0 : 0.19,
-    duration: hasAudio ? audioDefaultDuration() : 0.01,
+    duration: hasAudio ? 1 : 0.01,
   };
 }
 
@@ -1436,11 +1443,19 @@ async function runSimulation(): Promise<void> {
     setStatusMessage("电路为空，请先拖入元件");
     return;
   }
-  // 含音频输入时只允许 tran 仿真；未自定义参数时用音频默认（0s 开始 + 实际时长）
+  // 含音频输入时只允许 tran 仿真；未自定义参数时用音频默认（0s 开始 + 1s 持续）
   if (circuit.components.some((c) => c.kind === "audio")) {
     analysisKind = "tran";
     if (!simParamsCustom) {
       simParams = tranDefaults(true);
+    }
+    // 无论默认还是自定义，时长超出音频剩余长度时收缩到（音频实际时长 - 开始时间）
+    const p = simParams as { step?: number; start?: number; duration?: number };
+    const start = typeof p.start === "number" ? p.start : 0;
+    const duration = typeof p.duration === "number" ? p.duration : 1;
+    const clamped = clampAudioDuration(start, duration);
+    if (clamped !== duration) {
+      simParams = { ...simParams, duration: clamped };
     }
     syncSimOptions();
   }
@@ -1583,10 +1598,13 @@ function applySimOptions(): void {
     };
   } else if (analysisKind === "tran") {
     const d = tranDefaults(hasAudio);
+    const start = numOr(simTranStart.value, d.start);
+    let duration = numOr(simTranDuration.value, d.duration);
+    if (hasAudio) duration = clampAudioDuration(start, duration);
     simParams = {
       step: numOr(simTranStep.value, d.step),
-      start: numOr(simTranStart.value, d.start),
-      duration: numOr(simTranDuration.value, d.duration),
+      start,
+      duration,
     };
   } else {
     simParams = {};
