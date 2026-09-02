@@ -19,6 +19,7 @@ import {
   restoreHistoryState,
   type PlacedItem,
 } from "./circuitStore";
+import type { AnalysisKind } from "../types/protocol";
 
 const DEFAULT_FILENAME = "circuit";
 const FILENAME_META_KEY = "breadspice:last-filename";
@@ -29,10 +30,38 @@ let saving = false;
 const breadKey = (): string => `${filename}.bread`;
 const cacheKey = (): string => `${filename}.breadcache`;
 
+/** 仿真选项（作为布局的一部分持久化，但不进撤销/重做栈）。 */
+export interface SimOptions {
+  analysis: AnalysisKind;
+  params: Record<string, unknown>;
+  custom: boolean;
+}
+
+function defaultSimOptions(): SimOptions {
+  return { analysis: "tran", params: { step: 1e-5, start: 0.19, duration: 0.01 }, custom: false };
+}
+
+function cloneSimOptions(o: SimOptions): SimOptions {
+  return { analysis: o.analysis, params: { ...o.params }, custom: o.custom };
+}
+
+let simOptions: SimOptions = defaultSimOptions();
+
+/** 读取当前仿真选项（前端在启动/导入后据此恢复）。 */
+export function getSimOptions(): SimOptions {
+  return cloneSimOptions(simOptions);
+}
+
+/** 更新当前仿真选项（前端在用户修改/切换信号源后同步）。 */
+export function setSimOptions(opts: SimOptions): void {
+  simOptions = cloneSimOptions(opts);
+}
+
 interface BreadFile {
   format: "breadspice-bread";
   version: 1;
   items: PlacedItem[];
+  sim?: SimOptions;
 }
 
 interface BreadCacheFile {
@@ -41,16 +70,45 @@ interface BreadCacheFile {
   current: PlacedItem[];
   undo: PlacedItem[][];
   redo: PlacedItem[][];
+  sim?: SimOptions;
+}
+
+/**
+ * 写 .bread 前清洗音频输入：只保留预设音符占位符（preset:C/A/G/E/D），
+ * 上传音频的注册表 id 置空（.bread 不含具体音频内容）。
+ */
+function sanitizeBreadItems(items: PlacedItem[]): PlacedItem[] {
+  return items.map((it) => {
+    const clone = JSON.parse(JSON.stringify(it)) as PlacedItem;
+    const ins = clone.instance;
+    if (ins.kind === "audio") {
+      const audio = ins.params?.audio;
+      if (audio && !audio.startsWith("preset:")) {
+        ins.params = { ...(ins.params ?? {}), audio: "" };
+      }
+    }
+    return clone;
+  });
 }
 
 function serializeBread(): string {
-  const data: BreadFile = { format: "breadspice-bread", version: 1, items: getPlaced() };
+  const data: BreadFile = {
+    format: "breadspice-bread",
+    version: 1,
+    items: sanitizeBreadItems(getPlaced()),
+    sim: getSimOptions(),
+  };
   return JSON.stringify(data, null, 2);
 }
 
 function serializeCache(): string {
   const h = getHistoryState();
-  const data: BreadCacheFile = { format: "breadspice-breadcache", version: 1, ...h };
+  const data: BreadCacheFile = {
+    format: "breadspice-breadcache",
+    version: 1,
+    ...h,
+    sim: getSimOptions(),
+  };
   return JSON.stringify(data, null, 2);
 }
 
@@ -74,6 +132,7 @@ export function initProject(): void {
     try {
       const data = JSON.parse(cacheRaw) as BreadCacheFile;
       if (data?.format === "breadspice-breadcache" && Array.isArray(data.current)) {
+        setSimOptions(data.sim ?? defaultSimOptions());
         restoreHistoryState({
           current: data.current,
           undo: data.undo ?? [],
@@ -91,6 +150,7 @@ export function initProject(): void {
     try {
       const data = JSON.parse(breadRaw) as BreadFile;
       if (data?.format === "breadspice-bread" && Array.isArray(data.items)) {
+        setSimOptions(data.sim ?? defaultSimOptions());
         replaceAll(data.items);
       }
     } catch {
@@ -134,6 +194,7 @@ export async function importBreadFile(file: File): Promise<void> {
   // 先改文件名，再替换，确保随后的缓存写入新文件名的 key。
   const base = file.name.replace(/\.bread$/i, "") || DEFAULT_FILENAME;
   setFilename(base);
+  setSimOptions(data.sim ?? defaultSimOptions());
   replaceAll(data.items);
 }
 

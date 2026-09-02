@@ -25,10 +25,12 @@ import {
 import {
   downloadBread,
   getFilename,
+  getSimOptions,
   importBreadFile,
   initProject,
   saveProject,
   setFilename,
+  setSimOptions,
 } from "./store/projectStore";
 import {
   startBodyDrag,
@@ -323,6 +325,8 @@ let currentScopeTrace: Trace | null = null;
 let simulating = false;
 /** 上一次的输入信号源类型（用于检测 vsine ↔ audio 切换并重置 tran 参数）。 */
 let lastSourceKind: "none" | "vsine" | "audio" = "none";
+/** 项目加载/导入期间为 true：抑制「信号源切换重置 tran 参数」，待仿真选项恢复后再放开。 */
+let loadingProject = true;
 
 /** 当前电路的输入信号源类型（音频优先，其次正弦波发生器，否则 none）。 */
 function signalSourceKind(): "none" | "vsine" | "audio" {
@@ -330,6 +334,19 @@ function signalSourceKind(): "none" | "vsine" | "audio" {
   if (kinds.includes("audio")) return "audio";
   if (kinds.includes("vsine")) return "vsine";
   return "none";
+}
+
+/** 把当前仿真选项同步到 projectStore（供保存/自动缓存写入 .bread/.breadcache）。 */
+function syncSimOptions(): void {
+  setSimOptions({ analysis: analysisKind, params: simParams, custom: simParamsCustom });
+}
+
+/** 从 projectStore 读回仿真选项并应用到本地状态（启动/导入后调用）。 */
+function applyLoadedSimOptions(): void {
+  const s = getSimOptions();
+  analysisKind = s.analysis;
+  simParams = { ...s.params };
+  simParamsCustom = s.custom;
 }
 
 /** 按信号源类型重置 tran 参数为对应默认值（清除自定义标记）。 */
@@ -340,12 +357,13 @@ function resetTranDefaults(kind: "vsine" | "audio"): void {
     simParams = { step: 1e-5, start: 0.19, duration: 0.01 };
   }
   simParamsCustom = false;
+  syncSimOptions();
 }
 
 subscribe(() => {
   const kind = signalSourceKind();
   if (kind !== lastSourceKind) {
-    if (kind === "audio" || kind === "vsine") resetTranDefaults(kind);
+    if (!loadingProject && (kind === "audio" || kind === "vsine")) resetTranDefaults(kind);
     lastSourceKind = kind;
   }
   updateStatus();
@@ -356,6 +374,8 @@ render();
 
 // —— 恢复上次会话（.breadcache 优先，否则 .bread）——
 initProject();
+applyLoadedSimOptions();
+loadingProject = false;
 filenameInput.value = getFilename();
 updatePreviewUI();
 
@@ -1298,13 +1318,17 @@ importFileInput.addEventListener("change", async () => {
   importFileInput.value = "";
   if (!file) return;
   try {
+    loadingProject = true;
     await importBreadFile(file);
+    applyLoadedSimOptions();
     selectedId = null;
     filenameInput.value = getFilename();
     render();
     setStatusMessage(`已导入 ${file.name}`);
   } catch (err) {
     setStatusMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    loadingProject = false;
   }
 });
 
@@ -1394,6 +1418,7 @@ async function runSimulation(): Promise<void> {
     if (!simParamsCustom) {
       simParams = { step: 1e-5, start: 0, duration: 1 };
     }
+    syncSimOptions();
   }
   setStatusMessage(`仿真中（${analysisKind}）…`);
   simulating = true;
@@ -1539,6 +1564,7 @@ function applySimOptions(): void {
     simParams = {};
   }
   simParamsCustom = true;
+  syncSimOptions();
   closeSimOptions();
 }
 
