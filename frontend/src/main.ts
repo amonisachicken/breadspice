@@ -1659,9 +1659,11 @@ function openSimOptions(): void {
   } else {
     simAnalysis.value = analysisKind;
   }
-  // 同步 tran 字段：未自定义时展示当前信号源的默认值，自定义则展示已保存值
+  // 同步 tran 字段：仅当当前分析为 tran 且已自定义时展示已保存值，
+  // 否则展示当前信号源的默认值（避免把 ac 的起始频率误当成 tran 起始时间）。
   const d = tranDefaults(hasAudio);
-  const eff = simParamsCustom
+  const isTranCustom = simParamsCustom && analysisKind === "tran";
+  const eff = isTranCustom
     ? (simParams as { step?: number; start?: number; duration?: number })
     : d;
   simTranStep.value = String(eff.step ?? d.step);
