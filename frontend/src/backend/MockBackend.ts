@@ -194,10 +194,11 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
         `X${comp.refdes}B ${nodeOfPin("INB+")} ${nodeOfPin("INB-")} ${vp} ${vm} ${nodeOfPin("OUTB")} OP07A`;
     } else if (comp.kind === "potentiometer") {
       // 电位器：两个串联电阻 R<refdes>A（1-2，R1）、R<refdes>B（2-3，R2）
+      // ngspice 不允许 0Ω：两端到底时用 0.001Ω 兜底
       const percent = Math.min(1, Math.max(0, Number(comp.params?.percent ?? "0.5") || 0));
       const total = parseOhms(comp.value, comp.unit);
-      const r1 = formatOhms(total * percent);
-      const r2 = formatOhms(total * (1 - percent));
+      const r1 = formatOhms(Math.max(total * percent, 1e-3));
+      const r2 = formatOhms(Math.max(total * (1 - percent), 1e-3));
       line = `R${comp.refdes}A ${nodeOfPin("1")} ${nodeOfPin("2")} ${r1}\n` +
         `R${comp.refdes}B ${nodeOfPin("2")} ${nodeOfPin("3")} ${r2}`;
     } else if (comp.kind === "diode" || comp.kind === "led") {

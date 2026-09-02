@@ -343,14 +343,15 @@ fn build_device_line(
         }
         // 电位器：两个串联电阻 R<refdes>A（引脚1-2，R1）与 R<refdes>B（引脚2-3，R2）。
         // 总阻值 = R1 + R2，百分比 percent = R1/(R1+R2)。
+        // ngspice 不允许 0Ω 电阻：拖动到两端时用一个极小值（与导线 0.001Ω 一致）兜底。
         ComponentKind::Potentiometer => {
             let percent: f64 = param_or(comp.params.as_ref(), "percent", "0.5")
                 .parse::<f64>()
                 .unwrap_or(0.5)
                 .clamp(0.0, 1.0);
             let total = parse_ohms(value, comp.unit.as_deref());
-            let r1 = format_ohms(total * percent);
-            let r2 = format_ohms(total * (1.0 - percent));
+            let r1 = format_ohms((total * percent).max(1e-3));
+            let r2 = format_ohms((total * (1.0 - percent)).max(1e-3));
             let n1 = pin_node("1");
             let n2 = pin_node("2");
             let n3 = pin_node("3");
@@ -898,11 +899,29 @@ mod tests {
 
         // 30% → R1 = 3k, R2 = 7k
         pot.params = Some(HashMap::from([("percent".to_string(), "0.3".to_string())]));
-        circuit.components = vec![pot];
+        circuit.components = vec![pot.clone()];
         let netlist = build_netlist(&circuit);
         assert_eq!(
             netlist.devices[0].line,
             "RP1A n_rail_Lp n_t1L 3k\nRP1B n_t1L n_rail_Lm 7k"
+        );
+
+        // 0% → R1 兜底为 0.001，R2 = 10k
+        pot.params = Some(HashMap::from([("percent".to_string(), "0".to_string())]));
+        circuit.components = vec![pot.clone()];
+        let netlist = build_netlist(&circuit);
+        assert_eq!(
+            netlist.devices[0].line,
+            "RP1A n_rail_Lp n_t1L 0.001\nRP1B n_t1L n_rail_Lm 10k"
+        );
+
+        // 100% → R1 = 10k，R2 兜底为 0.001
+        pot.params = Some(HashMap::from([("percent".to_string(), "1".to_string())]));
+        circuit.components = vec![pot];
+        let netlist = build_netlist(&circuit);
+        assert_eq!(
+            netlist.devices[0].line,
+            "RP1A n_rail_Lp n_t1L 10k\nRP1B n_t1L n_rail_Lm 0.001"
         );
     }
 }
