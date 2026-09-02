@@ -430,14 +430,14 @@ export const CATALOG: CatalogEntry[] = [
     bodyPathIds: ["path10", "path11", "path2", "path3", "path4", "path5", "path6", "path7", "path8", "path9"],
     bodyOrigin: { x: 379.2, y: 273.6 },
     terminals: [
-      { name: "OFFSET", x: -14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
-      { name: "IN-", x: -14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
-      { name: "IN+", x: -14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
-      { name: "V-", x: -14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
-      { name: "OFFSET", x: 14.4, y: -14.4, dx: 0, dy: 0, length: 0 },
-      { name: "OUT", x: 14.4, y: -4.8, dx: 0, dy: 0, length: 0 },
-      { name: "V+", x: 14.4, y: 4.8, dx: 0, dy: 0, length: 0 },
-      { name: "NC", x: 14.4, y: 14.4, dx: 0, dy: 0, length: 0 },
+      { name: "OFFSET", x: -14.4, y: -14.4, dx: 0, dy: 0, length: 0 }, // pin 1
+      { name: "IN-", x: -14.4, y: -4.8, dx: 0, dy: 0, length: 0 }, // pin 2
+      { name: "IN+", x: -14.4, y: 4.8, dx: 0, dy: 0, length: 0 }, // pin 3
+      { name: "V-", x: -14.4, y: 14.4, dx: 0, dy: 0, length: 0 }, // pin 4
+      { name: "NC", x: 14.4, y: -14.4, dx: 0, dy: 0, length: 0 }, // pin 8（右上）
+      { name: "V+", x: 14.4, y: -4.8, dx: 0, dy: 0, length: 0 }, // pin 7
+      { name: "OUT", x: 14.4, y: 4.8, dx: 0, dy: 0, length: 0 }, // pin 6
+      { name: "OFFSET", x: 14.4, y: 14.4, dx: 0, dy: 0, length: 0 }, // pin 5（右下）
     ],
     rigid: true,
     info:

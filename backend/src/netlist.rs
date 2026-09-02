@@ -702,14 +702,14 @@ mod tests {
             "OP07",
             None,
             vec![
-                pin("OFFSET", Some("t1a")), // 忽略
-                pin("IN-", Some("t1b")),
-                pin("IN+", Some("t1f")),
-                pin("V-", Some("rail_Lm_1")),
-                pin("OFFSET", Some("t1a")), // 忽略
-                pin("OUT", Some("t1f")),
-                pin("V+", Some("rail_Lp_1")),
-                pin("NC", None), // 忽略
+                pin("OFFSET", Some("t1a")), // pin 1（忽略）
+                pin("IN-", Some("t1b")), // pin 2
+                pin("IN+", Some("t1f")), // pin 3
+                pin("V-", Some("rail_Lm_1")), // pin 4
+                pin("NC", None), // pin 8（右上，忽略）
+                pin("V+", Some("rail_Lp_1")), // pin 7
+                pin("OUT", Some("t1f")), // pin 6
+                pin("OFFSET", Some("t1a")), // pin 5（右下，忽略）
             ],
         )];
 
