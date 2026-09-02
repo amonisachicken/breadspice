@@ -336,6 +336,34 @@ function signalSourceKind(): "none" | "vsine" | "audio" {
   return "none";
 }
 
+/** 解析数字输入：空字符串/非法值回退 fallback，但 0 是合法值（修复旧 `||` 把 0 当成缺失）。 */
+function numOr(raw: string, fallback: number): number {
+  const t = raw.trim();
+  if (t === "") return fallback;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** 音频默认 tran 时长：取已放置音频的实际时长，未知则回退 1s。 */
+function audioDefaultDuration(): number {
+  const audio = getPlaced().find((p) => p.instance.kind === "audio");
+  const raw = audio?.instance.params?.duration;
+  if (raw !== undefined) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 1;
+}
+
+/** tran 默认参数：音频用 0s 开始 + 实际时长，其余用 0.19s 开始 + 0.01s 持续。 */
+function tranDefaults(hasAudio: boolean): { step: number; start: number; duration: number } {
+  return {
+    step: 1e-5,
+    start: hasAudio ? 0 : 0.19,
+    duration: hasAudio ? audioDefaultDuration() : 0.01,
+  };
+}
+
 /** 把当前仿真选项同步到 projectStore（供保存/自动缓存写入 .bread/.breadcache）。 */
 function syncSimOptions(): void {
   setSimOptions({ analysis: analysisKind, params: simParams, custom: simParamsCustom });
@@ -351,11 +379,7 @@ function applyLoadedSimOptions(): void {
 
 /** 按信号源类型重置 tran 参数为对应默认值（清除自定义标记）。 */
 function resetTranDefaults(kind: "vsine" | "audio"): void {
-  if (kind === "audio") {
-    simParams = { step: 1e-5, start: 0, duration: 1 };
-  } else {
-    simParams = { step: 1e-5, start: 0.19, duration: 0.01 };
-  }
+  simParams = tranDefaults(kind === "audio");
   simParamsCustom = false;
   syncSimOptions();
 }
@@ -1412,11 +1436,11 @@ async function runSimulation(): Promise<void> {
     setStatusMessage("电路为空，请先拖入元件");
     return;
   }
-  // 含音频输入时只允许 tran 仿真；未自定义参数时默认 0s 开始、持续 1s
+  // 含音频输入时只允许 tran 仿真；未自定义参数时用音频默认（0s 开始 + 实际时长）
   if (circuit.components.some((c) => c.kind === "audio")) {
     analysisKind = "tran";
     if (!simParamsCustom) {
-      simParams = { step: 1e-5, start: 0, duration: 1 };
+      simParams = tranDefaults(true);
     }
     syncSimOptions();
   }
@@ -1517,11 +1541,14 @@ function openSimOptions(): void {
   } else {
     simAnalysis.value = analysisKind;
   }
-  // 同步 tran 字段（音频时默认 0s 开始、持续 1s）
-  const tp = simParams as { step?: number; start?: number; duration?: number };
-  simTranStep.value = String(tp.step ?? 1e-5);
-  simTranStart.value = String(tp.start ?? (hasAudio ? 0 : 0.19));
-  simTranDuration.value = String(tp.duration ?? (hasAudio ? 1 : 0.01));
+  // 同步 tran 字段：未自定义时展示当前信号源的默认值，自定义则展示已保存值
+  const d = tranDefaults(hasAudio);
+  const eff = simParamsCustom
+    ? (simParams as { step?: number; start?: number; duration?: number })
+    : d;
+  simTranStep.value = String(eff.step ?? d.step);
+  simTranStart.value = String(eff.start ?? d.start);
+  simTranDuration.value = String(eff.duration ?? d.duration);
   // 直流扫描源默认填第一个电压源器件名（如 VB1）
   const firstSource = getPlaced().find(
     (p) => p.instance.kind === "power" || p.instance.kind === "vsine",
@@ -1555,10 +1582,11 @@ function applySimOptions(): void {
       stop: Number(simAcStop.value) || 20000,
     };
   } else if (analysisKind === "tran") {
+    const d = tranDefaults(hasAudio);
     simParams = {
-      step: Number(simTranStep.value) || 1e-5,
-      start: Number(simTranStart.value) || 0.19,
-      duration: Number(simTranDuration.value) || 0.01,
+      step: numOr(simTranStep.value, d.step),
+      start: numOr(simTranStart.value, d.start),
+      duration: numOr(simTranDuration.value, d.duration),
     };
   } else {
     simParams = {};
