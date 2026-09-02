@@ -277,6 +277,7 @@ fn list_component_models() -> Vec<ComponentModel> {
         model(Jfet, "JFET", &["D", "G", "S"]),
         model(Nmos, "NMOS", &["D", "G", "S"]),
         model(Opamp, "运放 OP07", &["IN+", "IN-", "V+", "V-", "OUT"]),
+        model(Potentiometer, "电位器", &["1", "2", "3"]),
         model(Power, "电池", &["+", "−"]),
         model(Gnd, "接地", &["gnd"]),
         model(Vsine, "正弦波发生器", &["+", "−"]),

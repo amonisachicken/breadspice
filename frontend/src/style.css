@@ -409,7 +409,8 @@ button.toggle.active {
   opacity: 0.85;
 }
 
-#audio-gain-label {
+#audio-gain-label,
+#pot-percent-label {
   min-width: 34px;
   text-align: right;
   font-size: 12px;
@@ -431,6 +432,15 @@ button.toggle.active {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+.modal__field select {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
 }
 
 .meter-readout {

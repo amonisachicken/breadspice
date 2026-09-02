@@ -43,6 +43,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   jfet: "J",
   opamp: "X",
   opamp2: "X",
+  potentiometer: "R", // 电位器 → 两个串联电阻
   jumper: "R", // 跳线以近零电阻 R 近似
   wire: "R",
   power: "V",
@@ -76,6 +77,28 @@ function spiceModelName(comp: ComponentInstance): string {
     return comp.value === "OP07" ? "OP07A" : comp.value;
   }
   return comp.value;
+}
+
+/** 解析「数值 + 单位」为欧姆（电位器总阻值用）。 */
+function parseOhms(value: string, unit?: string): number {
+  const v = Number(value) || 0;
+  if (unit === "kΩ") return v * 1e3;
+  if (unit === "MΩ") return v * 1e6;
+  if (unit === "GΩ") return v * 1e9;
+  if (unit === "mΩ") return v * 1e-3;
+  return v;
+}
+
+/** 把欧姆值格式化为整洁的 SPICE 数值字符串（如 5000 -> "5k"）。 */
+function formatOhms(ohms: number): string {
+  if (ohms === 0) return "0";
+  let scale = 1;
+  let suffix = "";
+  if (Math.abs(ohms) >= 1e9) { scale = 1e9; suffix = "G"; }
+  else if (Math.abs(ohms) >= 1e6) { scale = 1e6; suffix = "Meg"; }
+  else if (Math.abs(ohms) >= 1e3) { scale = 1e3; suffix = "k"; }
+  else if (Math.abs(ohms) < 1e-3) { scale = 1e-3; suffix = "m"; }
+  return String(Number((ohms / scale).toFixed(4))) + suffix;
 }
 
 /**
@@ -169,6 +192,14 @@ function buildReferenceNetlist(circuit: Circuit): Netlist {
       const vm = nodeOfPin("V-");
       line = `X${comp.refdes}A ${nodeOfPin("INA+")} ${nodeOfPin("INA-")} ${vp} ${vm} ${nodeOfPin("OUTA")} OP07A\n` +
         `X${comp.refdes}B ${nodeOfPin("INB+")} ${nodeOfPin("INB-")} ${vp} ${vm} ${nodeOfPin("OUTB")} OP07A`;
+    } else if (comp.kind === "potentiometer") {
+      // 电位器：两个串联电阻 R<refdes>A（1-2，R1）、R<refdes>B（2-3，R2）
+      const percent = Math.min(1, Math.max(0, Number(comp.params?.percent ?? "0.5") || 0));
+      const total = parseOhms(comp.value, comp.unit);
+      const r1 = formatOhms(total * percent);
+      const r2 = formatOhms(total * (1 - percent));
+      line = `R${comp.refdes}A ${nodeOfPin("1")} ${nodeOfPin("2")} ${r1}\n` +
+        `R${comp.refdes}B ${nodeOfPin("2")} ${nodeOfPin("3")} ${r2}`;
     } else if (comp.kind === "diode" || comp.kind === "led") {
       // 二极管/LED：D<name> <阳极> <阴极> <模型名>
       line = `${prefix}${comp.refdes} ${nodes[0] ?? "0"} ${nodes[1] ?? "0"} ${spiceModelName(comp)}`;
@@ -195,6 +226,7 @@ const STATIC_MODELS: ComponentModel[] = [
   { kind: "led", label: "LED", pins: pins(2) },
   { kind: "diode", label: "二极管", pins: pins(2) },
   { kind: "npn", label: "NPN 三极管", pins: pins(3) },
+  { kind: "potentiometer", label: "电位器", pins: pins(3) },
   { kind: "power", label: "电源/地", pins: pins(2) },
   { kind: "vsine", label: "正弦波发生器", pins: pins(2) },
   { kind: "voltmeter", label: "电压表", pins: pins(2) },

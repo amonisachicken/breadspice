@@ -139,6 +139,29 @@ app.innerHTML = `
       </div>
     </div>
   </div>
+  <div class="modal" id="pot-dialog" hidden>
+    <div class="modal__box">
+      <h3>电位器</h3>
+      <div class="modal__field">
+        <label>总阻值 (R1+R2)</label>
+        <input id="pot-value" type="text" autocomplete="off" />
+        <select id="pot-unit">
+          <option value="Ω">Ω</option>
+          <option value="kΩ">kΩ</option>
+          <option value="MΩ">MΩ</option>
+        </select>
+      </div>
+      <div class="modal__field">
+        <label>百分比 (R1/(R1+R2))</label>
+        <input id="pot-percent" type="range" min="0" max="100" step="1" value="50" />
+        <span id="pot-percent-label">50%</span>
+      </div>
+      <div class="modal__actions">
+        <button id="pot-cancel" type="button">取消</button>
+        <button id="pot-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
   <div class="modal" id="meter-dialog" hidden>
     <div class="modal__box">
       <h3 id="meter-title">电压表</h3>
@@ -644,6 +667,13 @@ const sineDc = document.querySelector<HTMLInputElement>("#sine-dc")!;
 const sinePhase = document.querySelector<HTMLInputElement>("#sine-phase")!;
 let sineTargetId: string | null = null;
 
+const potDialog = document.querySelector<HTMLDivElement>("#pot-dialog")!;
+const potValue = document.querySelector<HTMLInputElement>("#pot-value")!;
+const potUnit = document.querySelector<HTMLSelectElement>("#pot-unit")!;
+const potPercent = document.querySelector<HTMLInputElement>("#pot-percent")!;
+const potPercentLabel = document.querySelector<HTMLElement>("#pot-percent-label")!;
+let potTargetId: string | null = null;
+
 const meterDialog = document.querySelector<HTMLDivElement>("#meter-dialog")!;
 const meterTitle = document.querySelector<HTMLElement>("#meter-title")!;
 const meterValue = document.querySelector<HTMLElement>("#meter-value")!;
@@ -813,6 +843,10 @@ function openComponentDialog(id: string): void {
     openSineDialog(id, ins.params ?? {});
     return;
   }
+  if (ins.kind === "potentiometer") {
+    openPotDialog(id);
+    return;
+  }
   if (ins.kind === "audio") {
     openAudioDialog(id);
     return;
@@ -852,6 +886,37 @@ function openSineDialog(id: string, params: Record<string, string>): void {
 function closeSineDialog(): void {
   sineDialog.hidden = true;
   sineTargetId = null;
+}
+
+// —— 电位器对话框 ——
+function openPotDialog(id: string): void {
+  potTargetId = id;
+  const ins = getPlacedItem(id)?.instance;
+  potValue.value = ins?.value ?? "10";
+  potUnit.value = ins?.unit && ["Ω", "kΩ", "MΩ"].includes(ins.unit) ? ins.unit : "kΩ";
+  const percent = Number(ins?.params?.percent ?? "0.5");
+  const pct = Number.isFinite(percent) ? Math.round(Math.min(1, Math.max(0, percent)) * 100) : 50;
+  potPercent.value = String(pct);
+  potPercentLabel.textContent = `${pct}%`;
+  potDialog.hidden = false;
+  potValue.focus();
+  potValue.select();
+}
+
+function closePotDialog(): void {
+  potDialog.hidden = true;
+  potTargetId = null;
+}
+
+function applyPotDialog(): void {
+  if (!potTargetId) return;
+  const percent = (Number(potPercent.value) || 0) / 100;
+  commitUpdate(potTargetId, (ins) => {
+    ins.value = potValue.value.trim() || "10";
+    ins.unit = potUnit.value;
+    ins.params = { ...(ins.params ?? {}), percent: percent.toFixed(3) };
+  });
+  closePotDialog();
 }
 
 // —— 音频输入对话框 ——
@@ -1222,6 +1287,22 @@ for (const input of [sineFreq, sineAc, sineDc, sinePhase]) {
 
 sineDialog.addEventListener("click", (e) => {
   if (e.target === sineDialog) closeSineDialog();
+});
+
+// —— 电位器对话框事件 ——
+document.querySelector<HTMLButtonElement>("#pot-ok")!.addEventListener("click", applyPotDialog);
+document.querySelector<HTMLButtonElement>("#pot-cancel")!.addEventListener("click", closePotDialog);
+potPercent.addEventListener("input", () => {
+  potPercentLabel.textContent = `${potPercent.value}%`;
+});
+for (const input of [potValue]) {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.querySelector<HTMLButtonElement>("#pot-ok")!.click();
+    if (e.key === "Escape") closePotDialog();
+  });
+}
+potDialog.addEventListener("click", (e) => {
+  if (e.target === potDialog) closePotDialog();
 });
 
 // —— 音频输入对话框事件 ——

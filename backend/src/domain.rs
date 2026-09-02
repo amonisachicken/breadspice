@@ -63,6 +63,7 @@ pub enum ComponentKind {
     Jfet,
     Opamp,
     Opamp2,
+    Potentiometer,
     Jumper,
     Wire,
     Power,

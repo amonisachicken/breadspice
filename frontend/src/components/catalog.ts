@@ -354,6 +354,29 @@ export const CATALOG: CatalogEntry[] = [
     ],
   },
 
+  // —— 电位器（3 脚：1/2/3，后端展开为两个串联电阻 R1、R2）——
+  {
+    id: "potentiometer",
+    kind: "potentiometer",
+    label: "电位器",
+    value: "10",
+    unit: "kΩ",
+    prefix: "P",
+    bodyPathIds: ["pot5", "pot6", "pot7", "pot8", "pot2", "pot3", "pot4"],
+    bodyOrigin: { x: 30.24, y: 30.24 },
+    terminals: [
+      { name: "1", x: -19.44, y: 39.12, dx: 0, dy: 1, length: 18 },
+      { name: "2", x: -0.24, y: 39.12, dx: 0, dy: 1, length: 18 },
+      { name: "3", x: 23.76, y: 39.12, dx: 0, dy: 1, length: 18 },
+    ],
+    params: { percent: "0.5" },
+    info:
+      "电位器（可变电阻）\n" +
+      "引脚 1/3 为两端，2 为滑动端（中间抽头）\n" +
+      "总阻值 = R1 + R2，R1 = 引脚 1–2，R2 = 引脚 2–3\n" +
+      "双击设置总阻值与百分比（R1/(R1+R2)）",
+  },
+
   // —— 三极管 ×4 ——
   {
     id: "npn-bc549c",

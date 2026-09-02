@@ -65,6 +65,7 @@ export type ComponentKind =
   | "jfet"
   | "opamp"
   | "opamp2"
+  | "potentiometer" // 电位器（3 脚：1/2/3，后端展开为两个串联电阻）
   | "jumper" // 跳线（纯导线）
   | "wire" // 自由导线
   | "power" // 直流电源 / 电池

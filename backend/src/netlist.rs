@@ -68,6 +68,8 @@ fn spice_prefix(kind: ComponentKind) -> &'static str {
         ComponentKind::Jfet => "J",
         ComponentKind::Opamp => "X",
         ComponentKind::Opamp2 => "X",
+        // 电位器 -> 两个串联电阻（R<refdes>A / R<refdes>B）
+        ComponentKind::Potentiometer => "R",
         // 跳线 / 导线以近零电阻 R 近似
         ComponentKind::Jumper | ComponentKind::Wire => "R",
         ComponentKind::Power => "V",
@@ -111,6 +113,40 @@ fn spice_value(value: &str, unit: Option<&str>) -> String {
         other => other,
     };
     format!("{value}{suffix}")
+}
+
+/// 解析「数值 + 单位」为欧姆（电位器总阻值用）。
+fn parse_ohms(value: &str, unit: Option<&str>) -> f64 {
+    let v: f64 = value.trim().parse().unwrap_or(0.0);
+    match unit {
+        Some("kΩ") => v * 1e3,
+        Some("MΩ") => v * 1e6,
+        Some("GΩ") => v * 1e9,
+        Some("mΩ") => v * 1e-3,
+        _ => v, // "Ω" 或未知单位按欧姆
+    }
+}
+
+/// 把欧姆值格式化为整洁的 SPICE 数值字符串（如 5000 -> "5k"）。
+fn format_ohms(ohms: f64) -> String {
+    if ohms == 0.0 {
+        return "0".to_string();
+    }
+    let (scale, suffix) = if ohms.abs() >= 1e9 {
+        (1e9, "G")
+    } else if ohms.abs() >= 1e6 {
+        (1e6, "Meg")
+    } else if ohms.abs() >= 1e3 {
+        (1e3, "k")
+    } else if ohms.abs() < 1e-3 {
+        (1e-3, "m")
+    } else {
+        (1.0, "")
+    };
+    let scaled = ohms / scale;
+    let s = format!("{:.4}", scaled);
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    format!("{s}{suffix}")
 }
 
 /// 元件 -> ngspice 模型/子电路名。
@@ -304,6 +340,21 @@ fn build_device_line(
                 pin_node("OUTB")
             );
             format!("{a}\n{b}")
+        }
+        // 电位器：两个串联电阻 R<refdes>A（引脚1-2，R1）与 R<refdes>B（引脚2-3，R2）。
+        // 总阻值 = R1 + R2，百分比 percent = R1/(R1+R2)。
+        ComponentKind::Potentiometer => {
+            let percent: f64 = param_or(comp.params.as_ref(), "percent", "0.5")
+                .parse::<f64>()
+                .unwrap_or(0.5)
+                .clamp(0.0, 1.0);
+            let total = parse_ohms(value, comp.unit.as_deref());
+            let r1 = format_ohms(total * percent);
+            let r2 = format_ohms(total * (1.0 - percent));
+            let n1 = pin_node("1");
+            let n2 = pin_node("2");
+            let n3 = pin_node("3");
+            format!("R{refdes}A {n1} {n2} {r1}\nR{refdes}B {n2} {n3} {r2}")
         }
         // 二极管 / LED：D<name> <阳极> <阴极> <模型名>
         ComponentKind::Diode | ComponentKind::Led => {
@@ -819,5 +870,39 @@ mod tests {
         );
         // 增益为 1 时原样返回（避免无谓重格式化）
         assert_eq!(scale_pwl(pwl, 1.0), pwl);
+    }
+
+    #[test]
+    fn potentiometer_expands_to_two_series_resistors() {
+        let mut circuit = sample_circuit();
+        let mut pot = comp(
+            "p1",
+            ComponentKind::Potentiometer,
+            "P1",
+            "10",
+            Some("kΩ"),
+            vec![
+                pin("1", Some("rail_Lp_1")),
+                pin("2", Some("t1a")),
+                pin("3", Some("rail_Lm_1")),
+            ],
+        );
+        // 默认 50% → R1 = R2 = 5k
+        circuit.components = vec![pot.clone()];
+        let netlist = build_netlist(&circuit);
+        assert_eq!(netlist.devices[0].r#type, "R");
+        assert_eq!(
+            netlist.devices[0].line,
+            "RP1A n_rail_Lp n_t1L 5k\nRP1B n_t1L n_rail_Lm 5k"
+        );
+
+        // 30% → R1 = 3k, R2 = 7k
+        pot.params = Some(HashMap::from([("percent".to_string(), "0.3".to_string())]));
+        circuit.components = vec![pot];
+        let netlist = build_netlist(&circuit);
+        assert_eq!(
+            netlist.devices[0].line,
+            "RP1A n_rail_Lp n_t1L 3k\nRP1B n_t1L n_rail_Lm 7k"
+        );
     }
 }
