@@ -362,7 +362,7 @@ export const CATALOG: CatalogEntry[] = [
     value: "10",
     unit: "kΩ",
     prefix: "P",
-    bodyPathIds: ["pot5", "pot6", "pot7", "pot8", "pot2", "pot3", "pot4"],
+    bodyPathIds: ["pot2", "pot3", "pot4", "pot5", "pot6", "pot7", "pot8"],
     bodyOrigin: { x: 30.24, y: 30.24 },
     terminals: [
       { name: "1", x: -19.44, y: 39.12, dx: 0, dy: 1, length: 18 },
