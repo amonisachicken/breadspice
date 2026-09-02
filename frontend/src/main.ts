@@ -41,9 +41,11 @@ import {
   type DragContext,
 } from "./interaction/drag";
 import { reSnapPins, rotateWire } from "./interaction/placement";
+import { entryInfo, entryLabel } from "./components/catalog";
 import type { Circuit } from "./types/domain";
 import { formatEng, formatNum, meterReading, scopeTraceForAnalysis } from "./backend/simResults";
 import { downloadTraceAsWav, traceToWavBlob } from "./backend/wav";
+import { applyI18n, getLanguage, onLanguageChange, setLanguage, t } from "./i18n";
 import type { AnalysisKind, SimulationResult, Trace } from "./types/protocol";
 
 import "./style.css";
@@ -52,98 +54,101 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 app.innerHTML = `
   <header class="topbar">
-    <h1>面包板仿真 <span>BreadSpice</span></h1>
+    <h1><span data-i18n="app.title">面包板仿真</span> <span>BreadSpice</span></h1>
     <div class="topbar__actions">
-      <button id="test-backend" type="button">生成网表</button>
-      <button id="simulate" type="button">▶️ 仿真</button>
-      <button id="sim-options" type="button">仿真选项</button>
+      <button id="test-backend" type="button" data-i18n="topbar.generate">生成网表</button>
+      <button id="simulate" type="button" data-i18n="topbar.simulate">▶️ 仿真</button>
+      <button id="sim-options" type="button" data-i18n="topbar.simOptions">仿真选项</button>
       <span class="topbar__sep"></span>
-      <button id="preview" type="button" class="toggle">预览</button>
+      <button id="preview" type="button" class="toggle" data-i18n="topbar.preview">预览</button>
       <span class="topbar__sep"></span>
-      <button id="undo" type="button" disabled>撤销</button>
-      <button id="redo" type="button" disabled>重做</button>
-      <button id="save" type="button">保存布局</button>
-      <button id="download" type="button">下载</button>
-      <button id="import" type="button">导入</button>
-      <input id="filename" type="text" value="circuit" title="文件名（.bread）" />
+      <button id="undo" type="button" disabled data-i18n="topbar.undo">撤销</button>
+      <button id="redo" type="button" disabled data-i18n="topbar.redo">重做</button>
+      <button id="save" type="button" data-i18n="topbar.save">保存布局</button>
+      <button id="download" type="button" data-i18n="topbar.download">下载</button>
+      <button id="import" type="button" data-i18n="topbar.import">导入</button>
+      <input id="filename" type="text" value="circuit" title="文件名（.bread）" data-i18n-title="topbar.filenameTitle" />
       <span class="topbar__sep"></span>
-      <label class="zoom">缩放
+      <label class="zoom"><span data-i18n="topbar.zoom">缩放</span>
         <input id="zoom-slider" type="range" min="0.2" max="8" step="0.05" value="1" />
         <span id="zoom-label">100%</span>
       </label>
-      <button id="zoom-fit" type="button">适应</button>
-      <button id="toggle-holes" type="button">显示孔位</button>
-      <button id="clear" type="button">清空电路</button>
+      <button id="zoom-fit" type="button" data-i18n="topbar.fit">适应</button>
+      <button id="toggle-holes" type="button" data-i18n="topbar.showHoles">显示孔位</button>
+      <button id="clear" type="button" data-i18n="topbar.clear">清空电路</button>
       <input id="import-file" type="file" accept=".bread" hidden />
     </div>
   </header>
   <main class="layout">
-    <section class="canvas" id="canvas" aria-label="面包板画布"></section>
+    <section class="canvas" id="canvas" aria-label="面包板画布" data-i18n-aria-label="canvas.ariaLabel"></section>
     <aside class="palette">
-      <h2>元件库</h2>
-      <p class="palette__hint">拖入面包板；拖元件移动、拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放，双击蓝点设置/查看属性</p>
+      <h2 data-i18n="palette.title">元件库</h2>
+      <p class="palette__hint" data-i18n="palette.hint">拖入面包板；拖元件移动、拖蓝点旋转、拖绿点伸缩引脚，滚轮缩放，双击蓝点设置/查看属性</p>
       <div class="palette__list" id="palette-list"></div>
     </aside>
   </main>
-  <footer class="statusbar" id="statusbar"></footer>
+  <footer class="statusbar">
+    <button id="lang-toggle" type="button" title="中/EN">中/EN</button>
+    <span id="statusbar-text"></span>
+  </footer>
   <section class="netlist" id="netlist-panel" hidden>
     <header class="netlist__header">
-      <span class="netlist__title">网表</span>
-      <button id="netlist-collapse" type="button">收起</button>
+      <span class="netlist__title" data-i18n="netlist.title">网表</span>
+      <button id="netlist-collapse" type="button" data-i18n="netlist.collapse">收起</button>
     </header>
     <pre class="log" id="log"></pre>
   </section>
   <div class="modal" id="value-dialog" hidden>
     <div class="modal__box">
-      <h3 id="value-dialog-title">设置数值</h3>
+      <h3 id="value-dialog-title" data-i18n="value.title">设置数值</h3>
       <div class="modal__row">
         <input id="value-input" type="text" autocomplete="off" />
         <select id="unit-select"></select>
       </div>
       <div class="modal__actions">
-        <button id="value-cancel" type="button">取消</button>
-        <button id="value-ok" type="button">确定</button>
+        <button id="value-cancel" type="button" data-i18n="common.cancel">取消</button>
+        <button id="value-ok" type="button" data-i18n="common.ok">确定</button>
       </div>
     </div>
   </div>
   <div class="modal" id="info-dialog" hidden>
     <div class="modal__box">
-      <h3 id="info-dialog-title">元件信息</h3>
+      <h3 id="info-dialog-title" data-i18n="info.title">元件信息</h3>
       <pre class="modal__info" id="info-body"></pre>
       <div class="modal__actions">
-        <button id="info-close" type="button">关闭</button>
+        <button id="info-close" type="button" data-i18n="common.close">关闭</button>
       </div>
     </div>
   </div>
   <div class="modal" id="color-dialog" hidden>
     <div class="modal__box">
-      <h3>导线颜色</h3>
+      <h3 data-i18n="color.title">导线颜色</h3>
       <div class="color-swatches" id="color-swatches"></div>
       <input type="color" id="color-input" value="#2563eb" />
       <div class="modal__actions">
-        <button id="color-cancel" type="button">取消</button>
-        <button id="color-ok" type="button">确定</button>
+        <button id="color-cancel" type="button" data-i18n="common.cancel">取消</button>
+        <button id="color-ok" type="button" data-i18n="common.ok">确定</button>
       </div>
     </div>
   </div>
   <div class="modal" id="sine-dialog" hidden>
     <div class="modal__box">
-      <h3>正弦波发生器</h3>
-      <div class="modal__field"><label>频率 (Hz)</label><input id="sine-freq" type="text" autocomplete="off" /></div>
-      <div class="modal__field"><label>交流电压 (V)</label><input id="sine-ac" type="text" autocomplete="off" /></div>
-      <div class="modal__field"><label>直流电压 (V)</label><input id="sine-dc" type="text" autocomplete="off" /></div>
-      <div class="modal__field"><label>相位 (°)</label><input id="sine-phase" type="text" autocomplete="off" /></div>
+      <h3 data-i18n="sine.title">正弦波发生器</h3>
+      <div class="modal__field"><label data-i18n="sine.freq">频率 (Hz)</label><input id="sine-freq" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label data-i18n="sine.ac">交流电压 (V)</label><input id="sine-ac" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label data-i18n="sine.dc">直流电压 (V)</label><input id="sine-dc" type="text" autocomplete="off" /></div>
+      <div class="modal__field"><label data-i18n="sine.phase">相位 (°)</label><input id="sine-phase" type="text" autocomplete="off" /></div>
       <div class="modal__actions">
-        <button id="sine-cancel" type="button">取消</button>
-        <button id="sine-ok" type="button">确定</button>
+        <button id="sine-cancel" type="button" data-i18n="common.cancel">取消</button>
+        <button id="sine-ok" type="button" data-i18n="common.ok">确定</button>
       </div>
     </div>
   </div>
   <div class="modal" id="pot-dialog" hidden>
     <div class="modal__box">
-      <h3>电位器</h3>
+      <h3 data-i18n="pot.title">电位器</h3>
       <div class="modal__field">
-        <label>总阻值 (R1+R2)</label>
+        <label data-i18n="pot.total">总阻值 (R1+R2)</label>
         <input id="pot-value" type="text" autocomplete="off" />
         <select id="pot-unit">
           <option value="Ω">Ω</option>
@@ -152,13 +157,13 @@ app.innerHTML = `
         </select>
       </div>
       <div class="modal__field">
-        <label>百分比 (R1/(R1+R2))</label>
+        <label data-i18n="pot.percent">百分比 (R1/(R1+R2))</label>
         <input id="pot-percent" type="range" min="0" max="100" step="1" value="50" />
         <span id="pot-percent-label">50%</span>
       </div>
       <div class="modal__actions">
-        <button id="pot-cancel" type="button">取消</button>
-        <button id="pot-ok" type="button">确定</button>
+        <button id="pot-cancel" type="button" data-i18n="common.cancel">取消</button>
+        <button id="pot-ok" type="button" data-i18n="common.ok">确定</button>
       </div>
     </div>
   </div>
@@ -168,13 +173,13 @@ app.innerHTML = `
       <div class="meter-readout" id="meter-value">0.000 V</div>
       <p class="meter-hint" id="meter-hint">（未运行仿真）</p>
       <div class="modal__actions">
-        <button id="meter-close" type="button">关闭</button>
+        <button id="meter-close" type="button" data-i18n="common.close">关闭</button>
       </div>
     </div>
   </div>
   <div class="modal" id="scope-dialog" hidden>
     <div class="modal__box modal__box--wide">
-      <h3>示波器</h3>
+      <h3 data-i18n="scope.title">示波器</h3>
       <div class="scope-screen">
         <svg id="scope-svg" viewBox="0 0 300 180" preserveAspectRatio="none">
           <rect width="300" height="180" fill="#0f172a" />
@@ -204,76 +209,76 @@ app.innerHTML = `
           </g>
           <polyline id="scope-trace" fill="none" stroke="#22c55e" stroke-width="1.5" points="" />
         </svg>
-        <span class="scope-hint" id="scope-hint">等待仿真</span>
+        <span class="scope-hint" id="scope-hint" data-i18n="scope.waiting">等待仿真</span>
       </div>
       <div class="modal__actions" id="scope-actions">
         <button id="scope-fft" type="button">FFT</button>
-        <button id="scope-play" type="button">▶ 播放</button>
-        <button id="scope-download" type="button">下载 WAV</button>
-        <button id="scope-close" type="button">关闭</button>
+        <button id="scope-play" type="button" data-i18n="scope.play">▶ 播放</button>
+        <button id="scope-download" type="button" data-i18n="scope.downloadWav">下载 WAV</button>
+        <button id="scope-close" type="button" data-i18n="common.close">关闭</button>
       </div>
     </div>
   </div>
   <div class="modal" id="sim-options-dialog" hidden>
     <div class="modal__box">
-      <h3>仿真选项</h3>
+      <h3 data-i18n="sim.title">仿真选项</h3>
       <div class="modal__field">
-        <label>分析类型</label>
+        <label data-i18n="sim.analysis">分析类型</label>
         <select id="sim-analysis">
           <!-- op / dc 暂未开放入口，先隐藏（相关前后端代码保留，留待日后启用） -->
-          <option value="op" hidden>工作点（op）</option>
-          <option value="dc" hidden>直流扫描（dc）</option>
-          <option value="ac">交流分析（ac）</option>
-          <option value="tran">瞬态分析（tran）</option>
+          <option value="op" hidden data-i18n="sim.analysisOp">工作点（op）</option>
+          <option value="dc" hidden data-i18n="sim.analysisDc">直流扫描（dc）</option>
+          <option value="ac" data-i18n="sim.analysisAc">交流分析（ac）</option>
+          <option value="tran" data-i18n="sim.analysisTran">瞬态分析（tran）</option>
         </select>
       </div>
       <div id="sim-dc-fields" hidden>
-        <div class="modal__field"><label>扫描源（器件名）</label><input id="sim-dc-source" type="text" autocomplete="off" /></div>
-        <div class="modal__field"><label>起始 (V)</label><input id="sim-dc-start" type="number" step="any" value="0" /></div>
-        <div class="modal__field"><label>终止 (V)</label><input id="sim-dc-stop" type="number" step="any" value="9" /></div>
-        <div class="modal__field"><label>步长 (V)</label><input id="sim-dc-step" type="number" step="any" value="1" /></div>
+        <div class="modal__field"><label data-i18n="sim.dcSource">扫描源（器件名）</label><input id="sim-dc-source" type="text" autocomplete="off" /></div>
+        <div class="modal__field"><label data-i18n="sim.startV">起始 (V)</label><input id="sim-dc-start" type="number" step="any" value="0" /></div>
+        <div class="modal__field"><label data-i18n="sim.stopV">终止 (V)</label><input id="sim-dc-stop" type="number" step="any" value="9" /></div>
+        <div class="modal__field"><label data-i18n="sim.stepV">步长 (V)</label><input id="sim-dc-step" type="number" step="any" value="1" /></div>
       </div>
       <div id="sim-ac-fields" hidden>
-        <div class="modal__field"><label>扫描方式</label>
+        <div class="modal__field"><label data-i18n="sim.sweep">扫描方式</label>
           <select id="sim-ac-type">
             <option value="dec">dec</option>
             <option value="oct">oct</option>
             <option value="lin">lin</option>
           </select>
         </div>
-        <div class="modal__field"><label>点数</label><input id="sim-ac-points" type="number" value="100" /></div>
-        <div class="modal__field"><label>起始 (Hz)</label><input id="sim-ac-start" type="number" step="any" value="20" /></div>
-        <div class="modal__field"><label>终止 (Hz)</label><input id="sim-ac-stop" type="number" step="any" value="20000" /></div>
+        <div class="modal__field"><label data-i18n="sim.points">点数</label><input id="sim-ac-points" type="number" value="100" /></div>
+        <div class="modal__field"><label data-i18n="sim.startHz">起始 (Hz)</label><input id="sim-ac-start" type="number" step="any" value="20" /></div>
+        <div class="modal__field"><label data-i18n="sim.stopHz">终止 (Hz)</label><input id="sim-ac-stop" type="number" step="any" value="20000" /></div>
       </div>
       <div id="sim-tran-fields" hidden>
-        <div class="modal__field"><label>步长 (s)</label><input id="sim-tran-step" type="number" step="any" value="0.00001" /></div>
-        <div class="modal__field"><label>起始 (s)</label><input id="sim-tran-start" type="number" step="any" value="0.19" /></div>
-        <div class="modal__field"><label>持续 (s)</label><input id="sim-tran-duration" type="number" step="any" value="0.01" /></div>
+        <div class="modal__field"><label data-i18n="sim.stepS">步长 (s)</label><input id="sim-tran-step" type="number" step="any" value="0.00001" /></div>
+        <div class="modal__field"><label data-i18n="sim.startS">起始 (s)</label><input id="sim-tran-start" type="number" step="any" value="0.19" /></div>
+        <div class="modal__field"><label data-i18n="sim.durationS">持续 (s)</label><input id="sim-tran-duration" type="number" step="any" value="0.01" /></div>
       </div>
       <div class="modal__actions">
-        <button id="sim-options-cancel" type="button">取消</button>
-        <button id="sim-options-ok" type="button">确定</button>
+        <button id="sim-options-cancel" type="button" data-i18n="common.cancel">取消</button>
+        <button id="sim-options-ok" type="button" data-i18n="common.ok">确定</button>
       </div>
     </div>
   </div>
   <div class="modal" id="audio-dialog" hidden>
     <div class="modal__box">
-      <h3>音频输入</h3>
-      <p class="meter-hint" id="audio-status">未上传音频（上传或选择预设音符后作为电压源输入）</p>
+      <h3 data-i18n="audio.title">音频输入</h3>
+      <p class="meter-hint" id="audio-status" data-i18n="audio.notUploaded">未上传音频（上传或选择预设音符后作为电压源输入）</p>
       <div class="modal__field">
-        <label>预设音符</label>
+        <label data-i18n="audio.presets">预设音符</label>
         <div class="preset-list" id="preset-list"></div>
       </div>
       <div class="modal__field">
-        <label>输入增益</label>
+        <label data-i18n="audio.gain">输入增益</label>
         <input id="audio-gain" type="range" min="0" max="100" step="1" value="50" />
         <span id="audio-gain-label">50%</span>
       </div>
       <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden />
       <div class="modal__actions">
-        <button id="audio-choose" type="button">选择音频文件</button>
-        <button id="audio-play" type="button">▶ 播放</button>
-        <button id="audio-close" type="button">关闭</button>
+        <button id="audio-choose" type="button" data-i18n="audio.choose">选择音频文件</button>
+        <button id="audio-play" type="button" data-i18n="scope.play">▶ 播放</button>
+        <button id="audio-close" type="button" data-i18n="common.close">关闭</button>
       </div>
     </div>
   </div>
@@ -282,7 +287,8 @@ app.innerHTML = `
 const canvas = document.querySelector<HTMLElement>("#canvas")!;
 const paletteList = document.querySelector<HTMLElement>("#palette-list")!;
 const palette = document.querySelector<HTMLElement>(".palette")!;
-const statusbar = document.querySelector<HTMLElement>("#statusbar")!;
+const statusbar = document.querySelector<HTMLElement>("#statusbar-text")!;
+const langToggle = document.querySelector<HTMLButtonElement>("#lang-toggle")!;
 const log = document.querySelector<HTMLPreElement>("#log")!;
 const zoomSlider = document.querySelector<HTMLInputElement>("#zoom-slider")!;
 const zoomLabel = document.querySelector<HTMLElement>("#zoom-label")!;
@@ -308,6 +314,19 @@ const symbols = loadComponentSymbols();
 const dragCtx: DragContext = { svg, layout, symbols };
 renderComponentPalette(paletteList, symbols, dragCtx);
 
+// —— 国际化：应用初始语言 + 语言切换 ——
+applyI18n();
+langToggle.addEventListener("click", () => {
+  setLanguage(getLanguage() === "zh" ? "en" : "zh");
+});
+onLanguageChange(() => {
+  applyI18n();
+  renderComponentPalette(paletteList, symbols, dragCtx);
+  updateStatus();
+  updatePreviewUI();
+  updateSimulateButton();
+});
+
 // —— 放置状态与选中 ——
 let selectedId: string | null = null;
 let previewMode = false;
@@ -326,7 +345,7 @@ function updateHistoryButtons(): void {
 /** 预览模式：禁用编辑类控件，仅保留视图缩放与网表生成。 */
 function updatePreviewUI(): void {
   previewBtn.classList.toggle("active", previewMode);
-  previewBtn.textContent = previewMode ? "退出预览" : "预览";
+  previewBtn.textContent = previewMode ? t("topbar.exitPreview") : t("topbar.preview");
   clearBtn.disabled = previewMode;
   importBtn.disabled = previewMode;
   filenameInput.disabled = previewMode;
@@ -628,9 +647,12 @@ window.addEventListener("keydown", (e) => {
 
 // —— 状态栏 ——
 function updateStatus(): void {
-  statusbar.textContent =
-    `后端: ${backend.kind} · 已放置 ${getPlaced().length} 个元件 · ` +
-    `孔位 ${layout.nodes.length} · 网 ${layout.nets.length}`;
+  statusbar.textContent = t("status.backend", {
+    kind: backend.kind,
+    n: getPlaced().length,
+    holes: layout.nodes.length,
+    nets: layout.nets.length,
+  });
 }
 updateStatus();
 
@@ -737,7 +759,7 @@ function playAudio(url: string): void {
   }
   audioPlayer = new Audio(url);
   void audioPlayer.play().catch(() => {
-    setStatusMessage("播放失败");
+    setStatusMessage(t("status.playFailed"));
   });
 }
 
@@ -750,7 +772,7 @@ function renderPresets(): void {
     btn.className = "preset-btn";
     btn.textContent = p.name;
     btn.style.background = p.color;
-    btn.title = `预设音符 ${p.name}`;
+    btn.title = t("audio.presets") + " " + p.name;
     btn.addEventListener("click", () => selectPreset(p.name));
     presetList.appendChild(btn);
   }
@@ -761,9 +783,9 @@ function selectPreset(name: string): void {
   commitUpdate(audioTargetId, (ins) => {
     ins.params = { ...(ins.params ?? {}), audio: `preset:${name}`, duration: "7" };
   });
-  audioStatus.textContent = `已选预设音符 ${name}（时长约 7 s）`;
+  audioStatus.textContent = t("audio.presetSelected", { name });
   audioPlayUrl = `/api/preset/${name}`;
-  setStatusMessage(`已选预设音符 ${name}`);
+  setStatusMessage(t("status.presetSelected", { name }));
 }
 
 renderPresets();
@@ -852,11 +874,11 @@ function openComponentDialog(id: string): void {
     return;
   }
   if (ins.kind === "voltmeter") {
-    openMeterDialog(id, "电压表", "V");
+    openMeterDialog(id, t("meter.voltmeter"), "V");
     return;
   }
   if (ins.kind === "ammeter") {
-    openMeterDialog(id, "电流表", "A");
+    openMeterDialog(id, t("meter.ammeter"), "A");
     return;
   }
   if (ins.kind === "oscilloscope") {
@@ -867,7 +889,7 @@ function openComponentDialog(id: string): void {
   if (units) {
     openValueDialog(id, ins.value, ins.unit, units);
   } else if (entry.info) {
-    openInfoDialog(entry.label, entry.info);
+    openInfoDialog(entryLabel(entry), entryInfo(entry) ?? "");
   }
 }
 
@@ -925,9 +947,9 @@ function openAudioDialog(id: string): void {
   const ins = getPlacedItem(id)?.instance;
   const uploaded = ins?.params?.audio;
   if (uploaded) {
-    audioStatus.textContent = `已上传（id: ${uploaded}，时长 ${ins?.params?.duration ?? "?"} s）`;
+    audioStatus.textContent = t("audio.uploaded", { id: uploaded, dur: ins?.params?.duration ?? "?" });
   } else {
-    audioStatus.textContent = "未上传音频（上传后作为电压源输入）";
+    audioStatus.textContent = t("audio.notUploaded");
   }
   // 输入增益：默认 50%（衰减为 PCM 电压的 1/2），存为小数因子
   const gain = Number(ins?.params?.gain ?? "0.5");
@@ -945,17 +967,17 @@ function closeAudioDialog(): void {
 async function handleAudioFile(file: File): Promise<void> {
   if (!audioTargetId) return;
   audioPlayUrl = URL.createObjectURL(file);
-  audioStatus.textContent = "上传并转码中…";
+  audioStatus.textContent = t("audio.uploading");
   try {
     const { id, duration } = await backend.uploadAudio(file);
     commitUpdate(audioTargetId, (ins) => {
       ins.params = { ...(ins.params ?? {}), audio: id, duration: String(duration) };
     });
-    audioStatus.textContent = `已上传（id: ${id}，时长 ${duration.toFixed(3)} s）`;
-    setStatusMessage("音频已上传");
+    audioStatus.textContent = t("audio.uploaded", { id, dur: duration.toFixed(3) });
+    setStatusMessage(t("status.audioUploaded"));
   } catch (err) {
-    audioStatus.textContent = "上传失败，请重试";
-    setStatusMessage(`音频上传失败：${err instanceof Error ? err.message : String(err)}`);
+    audioStatus.textContent = t("audio.uploadFailed");
+    setStatusMessage(t("status.audioUploadFailed", { err: err instanceof Error ? err.message : String(err) }));
   }
 }
 
@@ -965,10 +987,10 @@ function openMeterDialog(id: string, title: string, unit: "V" | "A"): void {
   const reading = computeMeterReading(id);
   if (reading === null) {
     meterValue.textContent = unit === "V" ? "0.000 V" : "0.000 A";
-    meterHint.textContent = "（未运行仿真，或仪表未连接）";
+    meterHint.textContent = t("meter.notSimulated");
   } else {
     meterValue.textContent = `${reading} ${unit}`;
-    meterHint.textContent = "（最近一次仿真结果）";
+    meterHint.textContent = t("meter.lastResult");
   }
   meterDialog.hidden = false;
 }
@@ -1008,7 +1030,7 @@ function openScopeDialog(id: string): void {
   } else {
     scopeTraceEl.setAttribute("points", "");
     clearScopeAxes();
-    scopeHint.textContent = "等待仿真";
+    scopeHint.textContent = t("scope.waiting");
   }
 }
 
@@ -1024,13 +1046,13 @@ function drawScopeTrace(trace: Trace): void {
   if (!b) {
     scopeTraceEl.setAttribute("points", "");
     clearScopeAxes();
-    scopeHint.textContent = "等待仿真";
+    scopeHint.textContent = t("scope.waiting");
     return;
   }
   scopeTraceEl.setAttribute("points", tracePoints(trace, b, 300, 180));
   updateScopeAxes(b);
   // ac 分析显示频响曲线（幅度-频率），其余显示波形
-  scopeHint.textContent = analysisKind === "ac" ? `频响 ${trace.name}` : trace.name;
+  scopeHint.textContent = analysisKind === "ac" ? t("scope.freqResp", { name: trace.name }) : trace.name;
 }
 
 function traceBounds(trace: Trace): ScopeBounds | null {
@@ -1139,21 +1161,21 @@ function showScopeNormalView(): void {
 
 async function showFftView(): Promise<void> {
   if (!currentScopeTrace || currentScopeTrace.x.length < 4) {
-    setStatusMessage("暂无波形可做 FFT");
+    setStatusMessage(t("status.noFftWaveform"));
     return;
   }
-  setStatusMessage("正在计算 FFT…");
+  setStatusMessage(t("status.computingFft"));
   try {
     const spec = await backend.fft(currentScopeTrace.x, currentScopeTrace.y);
     drawFft(spec.x, spec.y);
     scopeHint.textContent = "FFT";
     fftViewActive = true;
-    scopeFftBtn.textContent = "返回";
+    scopeFftBtn.textContent = t("scope.back");
     scopePlayBtn.hidden = true;
     scopeDownloadBtn.hidden = true;
     scopeCloseBtn.hidden = true;
   } catch (err) {
-    setStatusMessage(`FFT 失败：${err instanceof Error ? err.message : String(err)}`);
+    setStatusMessage(t("status.fftFailed", { err: err instanceof Error ? err.message : String(err) }));
   }
 }
 
@@ -1173,7 +1195,7 @@ function drawFft(freqs: number[], dbs: number[]): void {
   if (validF.length === 0) {
     scopeTraceEl.setAttribute("points", "");
     clearScopeAxes();
-    scopeHint.textContent = "FFT（无有效数据）";
+    scopeHint.textContent = t("scope.fftNoData");
     return;
   }
   freqs = validF;
@@ -1333,7 +1355,7 @@ audioPlayBtn.addEventListener("click", () => {
   if (audioPlayUrl) {
     playAudio(audioPlayUrl);
   } else {
-    setStatusMessage("请先上传音频或选择预设音符");
+    setStatusMessage(t("status.pleaseUploadAudio"));
   }
 });
 
@@ -1358,27 +1380,27 @@ scopeFftBtn.addEventListener("click", () => {
 
 scopePlayBtn.addEventListener("click", () => {
   if (analysisKind !== "tran") {
-    setStatusMessage("仅 tran 仿真结果可播放为音频");
+    setStatusMessage(t("status.onlyTranPlay"));
     return;
   }
   if (currentScopeTrace) {
     const blob = traceToWavBlob(currentScopeTrace);
     playAudio(URL.createObjectURL(blob));
   } else {
-    setStatusMessage("暂无波形可播放，请先运行仿真");
+    setStatusMessage(t("status.noWaveformPlay"));
   }
 });
 
 scopeDownloadBtn.addEventListener("click", () => {
   if (analysisKind !== "tran") {
-    setStatusMessage("仅 tran 仿真结果可导出为 WAV");
+    setStatusMessage(t("status.onlyTranExport"));
     return;
   }
   if (currentScopeTrace) {
     downloadTraceAsWav(currentScopeTrace, `scope-${currentScopeTrace.name.replace(/[^A-Za-z0-9_.-]/g, "_")}.wav`);
-    setStatusMessage("已导出 WAV");
+    setStatusMessage(t("status.exportedWav"));
   } else {
-    setStatusMessage("暂无波形可下载，请先运行仿真");
+    setStatusMessage(t("status.noWaveformDownload"));
   }
 });
 
@@ -1416,7 +1438,7 @@ redoBtn.addEventListener("click", () => {
 saveBtn.addEventListener("click", () => {
   saveProject();
   updateHistoryButtons();
-  setStatusMessage("已保存");
+  setStatusMessage(t("status.saved"));
 });
 
 downloadBtn.addEventListener("click", () => {
@@ -1436,9 +1458,9 @@ importFileInput.addEventListener("change", async () => {
     selectedId = null;
     filenameInput.value = getFilename();
     render();
-    setStatusMessage(`已导入 ${file.name}`);
+    setStatusMessage(t("status.imported", { name: file.name }));
   } catch (err) {
-    setStatusMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+    setStatusMessage(t("status.importFailed", { err: err instanceof Error ? err.message : String(err) }));
   } finally {
     loadingProject = false;
   }
@@ -1446,7 +1468,7 @@ importFileInput.addEventListener("change", async () => {
 
 filenameInput.addEventListener("change", () => {
   setFilename(filenameInput.value);
-  setStatusMessage(`文件名已设为 ${getFilename()}.bread`);
+  setStatusMessage(t("status.filenameSet", { name: getFilename() }));
 });
 
 let statusMessageTimer: number | undefined;
@@ -1461,7 +1483,7 @@ let netlistCollapsed = false;
 netlistCollapseBtn.addEventListener("click", () => {
   netlistCollapsed = !netlistCollapsed;
   log.hidden = netlistCollapsed;
-  netlistCollapseBtn.textContent = netlistCollapsed ? "展开" : "收起";
+  netlistCollapseBtn.textContent = netlistCollapsed ? t("netlist.expand") : t("netlist.collapse");
 });
 
 // —— 显示/隐藏逻辑孔位 ——
@@ -1485,11 +1507,11 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
   const circuit = currentCircuit();
 
   if (circuit.components.length === 0) {
-    log.textContent = "（电路为空，请先拖入元件）";
+    log.textContent = t("status.circuitEmpty");
     netlistPanel.hidden = false;
     netlistCollapsed = false;
     log.hidden = false;
-    netlistCollapseBtn.textContent = "收起";
+    netlistCollapseBtn.textContent = t("netlist.collapse");
     return;
   }
 
@@ -1497,20 +1519,20 @@ document.querySelector<HTMLButtonElement>("#test-backend")!.addEventListener("cl
     const models = await backend.listModels();
     const netlist = await backend.buildNetlist(circuit);
     log.textContent = [
-      `后端种类: ${backend.kind}`,
-      `可用模型: ${models.map((m) => m.label).join("、")}`,
-      `已放置: ${circuit.components.map((c) => `${c.refdes}(${c.value})`).join("、")}`,
+      t("log.backendKind", { kind: backend.kind }),
+      t("log.models", { models: models.map((m) => m.label).join(getLanguage() === "en" ? ", " : "、") }),
+      t("log.placed", { list: circuit.components.map((c) => `${c.refdes}(${c.value})`).join(getLanguage() === "en" ? ", " : "、") }),
       ``,
-      `—— 当前电路网表 ——`,
+      t("log.netlistTitle"),
       netlist.text,
     ].join("\n");
   } catch (err) {
-    log.textContent = `生成网表失败：${err instanceof Error ? err.message : String(err)}`;
+    log.textContent = t("log.netlistFailed", { err: err instanceof Error ? err.message : String(err) });
   }
   netlistPanel.hidden = false;
   netlistCollapsed = false;
   log.hidden = false;
-  netlistCollapseBtn.textContent = "收起";
+  netlistCollapseBtn.textContent = t("netlist.collapse");
 });
 
 // —— 仿真 ——
@@ -1521,7 +1543,7 @@ function currentCircuit(): Circuit {
 async function runSimulation(): Promise<void> {
   const circuit = currentCircuit();
   if (circuit.components.length === 0) {
-    setStatusMessage("电路为空，请先拖入元件");
+    setStatusMessage(t("status.circuitEmpty"));
     return;
   }
   // 含音频输入时只允许 tran 仿真；未自定义参数时用音频默认（0s 开始 + 1s 持续）
@@ -1540,7 +1562,7 @@ async function runSimulation(): Promise<void> {
     }
     syncSimOptions();
   }
-  setStatusMessage(`仿真中（${analysisKind}）…`);
+  setStatusMessage(t("status.simulating", { kind: analysisKind }));
   simulating = true;
   updateSimulateButton();
   try {
@@ -1548,18 +1570,18 @@ async function runSimulation(): Promise<void> {
     lastSimResult = result;
     lastSimCircuit = circuit;
     if (!result.ok) {
-      setStatusMessage(`仿真失败：${result.error ?? "未知错误"}`);
+      setStatusMessage(t("status.simFailed", { err: result.error ?? t("log.unknownError") }));
       showSimResult(result);
       return;
     }
     if (result.cancelled) {
-      setStatusMessage("仿真已取消（保留部分结果）");
+      setStatusMessage(t("status.simCancelled"));
     } else {
-      setStatusMessage("仿真完成");
+      setStatusMessage(t("status.simDone"));
     }
     showSimResult(result);
   } catch (err) {
-    setStatusMessage(`仿真出错：${err instanceof Error ? err.message : String(err)}`);
+    setStatusMessage(t("status.simError", { err: err instanceof Error ? err.message : String(err) }));
   } finally {
     simulating = false;
     updateSimulateButton();
@@ -1567,46 +1589,46 @@ async function runSimulation(): Promise<void> {
 }
 
 function showSimResult(result: SimulationResult): void {
-  const lines: string[] = [`—— 仿真结果（${analysisKind}）——`];
+  const lines: string[] = [t("log.resultTitle", { kind: analysisKind })];
   if (result.cancelled) {
-    lines.push("（仿真已取消，以下为部分结果）");
+    lines.push(t("log.cancelled"));
   }
   if (!result.ok) {
-    lines.push("错误：" + (result.error ?? "未知错误"));
+    lines.push(t("log.error", { err: result.error ?? t("log.unknownError") }));
   }
   if (result.op) {
-    lines.push("工作点：");
+    lines.push(t("log.opPoint"));
     for (const [name, v] of Object.entries(result.op)) {
       lines.push(`  ${name} = ${formatNum(v)}`);
     }
   }
   if (result.traces) {
-    lines.push("曲线：");
-    for (const t of result.traces) {
-      lines.push(`  ${t.name}: ${t.y.length} 点`);
+    lines.push(t("log.traces"));
+    for (const tr of result.traces) {
+      lines.push(t("log.traceLine", { name: tr.name, n: tr.y.length }));
     }
   }
-  lines.push("", `（后端：${backend.kind}）`);
+  lines.push("", t("log.backend", { kind: backend.kind }));
   log.textContent = lines.join("\n");
   netlistPanel.hidden = false;
   netlistCollapsed = false;
   log.hidden = false;
-  netlistCollapseBtn.textContent = "收起";
+  netlistCollapseBtn.textContent = t("netlist.collapse");
 }
 
 const simulateBtn = document.querySelector<HTMLButtonElement>("#simulate")!;
 
 function updateSimulateButton(): void {
-  simulateBtn.textContent = simulating ? "⏹️ 停止" : "▶️ 仿真";
+  simulateBtn.textContent = simulating ? t("topbar.stop") : t("topbar.simulate");
   palette.classList.toggle("simulating", simulating);
 }
 
 async function stopSimulation(): Promise<void> {
-  setStatusMessage("正在停止仿真…");
+  setStatusMessage(t("status.stopping"));
   try {
     await backend.stopSimulation();
   } catch (err) {
-    setStatusMessage(`停止失败：${err instanceof Error ? err.message : String(err)}`);
+    setStatusMessage(t("status.stopFailed", { err: err instanceof Error ? err.message : String(err) }));
   }
 }
 

@@ -169,11 +169,38 @@ button:hover {
 }
 
 .statusbar {
-  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px;
   font-size: 12px;
   color: var(--muted);
   border-top: 1px solid var(--border);
   background: var(--panel);
+}
+
+#lang-toggle {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+#lang-toggle:hover {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+#statusbar-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log {

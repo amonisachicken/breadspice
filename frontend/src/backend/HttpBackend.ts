@@ -11,6 +11,7 @@
  */
 
 import type { Backend, BackendEventName } from "./Backend";
+import { t } from "../i18n";
 import type {
   BackendEvent,
   BackendRequest,
@@ -39,13 +40,13 @@ export class HttpBackend implements Backend {
 
   async listModels(): Promise<ComponentModel[]> {
     const resp = await this.rpc({ kind: "list_models" });
-    if (resp.kind !== "models") throw new Error(`后端响应异常：${resp.kind}`);
+    if (resp.kind !== "models") throw new Error(t("backend.badResponse", { kind: resp.kind }));
     return resp.models;
   }
 
   async buildNetlist(circuit: Circuit): Promise<Netlist> {
     const resp = await this.rpc({ kind: "build_netlist", circuit });
-    if (resp.kind !== "netlist") throw new Error(`后端响应异常：${resp.kind}`);
+    if (resp.kind !== "netlist") throw new Error(t("backend.badResponse", { kind: resp.kind }));
     return resp.netlist;
   }
 
@@ -53,7 +54,7 @@ export class HttpBackend implements Backend {
     const resp = await this.rpc({ kind: "simulate", request });
     if (resp.kind === "simulation") return resp.result;
     if (resp.kind === "error") throw new Error(`${resp.code}: ${resp.message}`);
-    throw new Error(`后端响应异常：${resp.kind}`);
+    throw new Error(t("backend.badResponse", { kind: resp.kind }));
   }
 
   async uploadAudio(file: Blob): Promise<{ id: string; duration: number }> {
@@ -66,12 +67,12 @@ export class HttpBackend implements Backend {
       });
     } catch (err) {
       throw new Error(
-        `无法连接后端（${err instanceof Error ? err.message : String(err)}），请先在 backend 目录运行 cargo run`,
+        t("backend.unreachable", { err: err instanceof Error ? err.message : String(err) }),
       );
     }
     if (!resp.ok) {
       const data = (await resp.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(`音频上传失败：${data?.error ?? `HTTP ${resp.status}`}`);
+      throw new Error(t("backend.uploadFailed", { err: data?.error ?? `HTTP ${resp.status}` }));
     }
     return (await resp.json()) as { id: string; duration: number };
   }
@@ -90,12 +91,12 @@ export class HttpBackend implements Backend {
       });
     } catch (err) {
       throw new Error(
-        `无法连接后端（${err instanceof Error ? err.message : String(err)}），请先在 backend 目录运行 cargo run`,
+        t("backend.unreachable", { err: err instanceof Error ? err.message : String(err) }),
       );
     }
     if (!resp.ok) {
       const data = (await resp.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(`FFT 失败：${data?.error ?? `HTTP ${resp.status}`}`);
+      throw new Error(t("backend.fftFailed", { err: data?.error ?? `HTTP ${resp.status}` }));
     }
     return (await resp.json()) as { x: number[]; y: number[] };
   }
@@ -127,10 +128,10 @@ export class HttpBackend implements Backend {
       });
     } catch (err) {
       throw new Error(
-        `无法连接后端（${err instanceof Error ? err.message : String(err)}），请先在 backend 目录运行 cargo run`,
+        t("backend.unreachable", { err: err instanceof Error ? err.message : String(err) }),
       );
     }
-    if (!resp.ok) throw new Error(`后端请求失败（HTTP ${resp.status}）`);
+    if (!resp.ok) throw new Error(t("backend.requestFailed", { status: resp.status }));
     return (await resp.json()) as BackendResponse;
   }
 

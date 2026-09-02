@@ -5,7 +5,8 @@
  */
 
 import partsSvgSource from "../assets/parts.svg?raw";
-import { CATALOG, buildSymbols, type BuiltSymbol } from "../components/catalog";
+import { CATALOG, buildSymbols, entryLabel, type BuiltSymbol } from "../components/catalog";
+import { t } from "../i18n";
 import { startComponentDrag, type DragContext } from "../interaction/drag";
 import { SVG_NS, parseSvg } from "./svgAsset";
 
@@ -53,7 +54,7 @@ export function renderComponentPalette(
 
     const item = document.createElement("div");
     item.className = "palette-item";
-    item.title = "拖拽到面包板放置（拖拽中按 R 旋转）；放置后双击可查看/设置属性";
+    item.title = t("palette.itemTitle");
 
     const svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
     if (entry.kind === "wire") {
@@ -86,7 +87,7 @@ export function renderComponentPalette(
     item.appendChild(svg);
 
     const label = document.createElement("span");
-    label.textContent = entry.label;
+    label.textContent = entryLabel(entry);
     item.appendChild(label);
 
     item.addEventListener("pointerdown", (e) => {

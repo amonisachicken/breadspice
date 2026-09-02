@@ -11,6 +11,7 @@
  */
 
 import type { ComponentKind } from "../types/domain";
+import { getLanguage } from "../i18n";
 import { SVG_NS } from "../render/svgAsset";
 
 /** 导线默认颜色。 */
@@ -36,6 +37,8 @@ export interface CatalogEntry {
   id: string;
   kind: ComponentKind;
   label: string;
+  /** 英文标签（国际化用）。 */
+  labelEn?: string;
   value: string;
   /** 单位（电阻/电容专用）。 */
   unit?: string;
@@ -52,12 +55,24 @@ export interface CatalogEntry {
   styleOverrides?: StyleOverrides;
   /** 双击元件时的介绍文本（半导体/IC 用，可含换行）。 */
   info?: string;
+  /** 英文介绍文本（国际化用）。 */
+  infoEn?: string;
   /** 程序化绘制身体（无 SVG 资产的元件，如电池）。 */
   bodyFactory?: () => SVGGElement;
   /** 弯导线（kind="wire" 且 curve=true 时为平滑贝塞尔曲线）。 */
   curve?: boolean;
   /** 元件默认参数（如正弦源的 freq/ac/dc/phase），放置时复制到实例。 */
   params?: Record<string, string>;
+}
+
+/** 取元件标签（按当前界面语言）。 */
+export function entryLabel(entry: CatalogEntry): string {
+  return getLanguage() === "en" ? (entry.labelEn ?? entry.label) : entry.label;
+}
+
+/** 取元件介绍（按当前界面语言）。 */
+export function entryInfo(entry: CatalogEntry): string | undefined {
+  return getLanguage() === "en" ? (entry.infoEn ?? entry.info) : entry.info;
 }
 
 const DIODE_TERMINALS: TerminalDef[] = [
@@ -265,6 +280,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "diode-1n4148",
     kind: "diode",
     label: "二极管 1N4148",
+    labelEn: "Diode 1N4148",
     value: "1N4148",
     prefix: "D",
     bodyPathIds: ["path13", "path14", "path15"],
@@ -272,11 +288,13 @@ export const CATALOG: CatalogEntry[] = [
     styleOverrides: { path13: { fill: "#1f2937" }, path14: { fill: "#ef4444" } },
     terminals: DIODE_TERMINALS,
     info: "1N4148 硅开关二极管\n正向压降 VF ≈ 0.7 V\n引脚：a 阳极（+）、k 阴极（−，色环端）",
+    infoEn: "1N4148 silicon switching diode\nForward drop VF ≈ 0.7 V\nPins: a anode (+), k cathode (−, banded end)",
   },
   {
     id: "diode-1n5817",
     kind: "diode",
     label: "二极管 1N5817",
+    labelEn: "Diode 1N5817",
     value: "1N5817",
     prefix: "D",
     bodyPathIds: ["path13", "path14", "path15"],
@@ -284,6 +302,7 @@ export const CATALOG: CatalogEntry[] = [
     styleOverrides: { path13: { fill: "#1f2937" }, path14: { fill: "#3b82f6" } },
     terminals: DIODE_TERMINALS,
     info: "1N5817 肖特基二极管\n正向压降 VF ≈ 0.3 V\n引脚：a 阳极（+）、k 阴极（−，色环端）",
+    infoEn: "1N5817 Schottky diode\nForward drop VF ≈ 0.3 V\nPins: a anode (+), k cathode (−, banded end)",
   },
 
   // —— LED ×3 ——
@@ -291,6 +310,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "led-red",
     kind: "led",
     label: "LED 红",
+    labelEn: "LED Red",
     value: "red",
     prefix: "D",
     bodyPathIds: ["path17", "path18", "path19"],
@@ -298,11 +318,13 @@ export const CATALOG: CatalogEntry[] = [
     styleOverrides: { path17: { fill: "#ef4444" }, path18: { stroke: "#b91c1c" }, path19: { stroke: "#b91c1c" } },
     terminals: LED_TERMINALS,
     info: "红色 LED 发光二极管\n正向压降 VF ≈ 1.8–2.2 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
+    infoEn: "Red LED\nForward drop VF ≈ 1.8–2.2 V\nPins: a anode (+, long lead), k cathode (−, short lead/flat edge)",
   },
   {
     id: "led-green",
     kind: "led",
     label: "LED 绿",
+    labelEn: "LED Green",
     value: "green",
     prefix: "D",
     bodyPathIds: ["path17", "path18", "path19"],
@@ -310,11 +332,13 @@ export const CATALOG: CatalogEntry[] = [
     styleOverrides: { path17: { fill: "#22c55e" }, path18: { stroke: "#16a34a" }, path19: { stroke: "#16a34a" } },
     terminals: LED_TERMINALS,
     info: "绿色 LED 发光二极管\n正向压降 VF ≈ 2.0–3.0 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
+    infoEn: "Green LED\nForward drop VF ≈ 2.0–3.0 V\nPins: a anode (+, long lead), k cathode (−, short lead/flat edge)",
   },
   {
     id: "led-blue",
     kind: "led",
     label: "LED 蓝",
+    labelEn: "LED Blue",
     value: "blue",
     prefix: "D",
     bodyPathIds: ["path17", "path18", "path19"],
@@ -322,6 +346,7 @@ export const CATALOG: CatalogEntry[] = [
     styleOverrides: { path17: { fill: "#3b82f6" }, path18: { stroke: "#1d4ed8" }, path19: { stroke: "#1d4ed8" } },
     terminals: LED_TERMINALS,
     info: "蓝色 LED 发光二极管\n正向压降 VF ≈ 2.8–3.4 V\n引脚：a 阳极（+，长脚）、k 阴极（−，短脚/平边）",
+    infoEn: "Blue LED\nForward drop VF ≈ 2.8–3.4 V\nPins: a anode (+, long lead), k cathode (−, short lead/flat edge)",
   },
 
   // —— 电容 / 电阻 ——
@@ -329,6 +354,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "capacitor",
     kind: "capacitor",
     label: "电容",
+    labelEn: "Capacitor",
     value: "10",
     unit: "µF",
     prefix: "C",
@@ -343,6 +369,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "resistor",
     kind: "resistor",
     label: "电阻",
+    labelEn: "Resistor",
     value: "1",
     unit: "kΩ",
     prefix: "R",
@@ -359,6 +386,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "potentiometer",
     kind: "potentiometer",
     label: "电位器",
+    labelEn: "Potentiometer",
     value: "10",
     unit: "kΩ",
     prefix: "P",
@@ -375,6 +403,11 @@ export const CATALOG: CatalogEntry[] = [
       "引脚 1/3 为两端，2 为滑动端（中间抽头）\n" +
       "总阻值 = R1 + R2，R1 = 引脚 1–2，R2 = 引脚 2–3\n" +
       "双击设置总阻值与百分比（R1/(R1+R2)）",
+    infoEn:
+      "Potentiometer (variable resistor)\n" +
+      "Pins 1/3 are the ends, 2 is the wiper (center tap)\n" +
+      "Total = R1 + R2; R1 = pins 1–2, R2 = pins 2–3\n" +
+      "Double-click to set total resistance and ratio (R1/(R1+R2))",
   },
 
   // —— 三极管 ×4 ——
@@ -393,6 +426,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "E", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
     info: "BC549C NPN 三极管\n极性：NPN（C 集电极流入、E 发射极流出）\n引脚（上→下）：C 集电极、B 基极、E 发射极",
+    infoEn: "BC549C NPN transistor\nPolarity: NPN (C collector in, E emitter out)\nPins (top→bottom): C collector, B base, E emitter",
   },
   {
     id: "pnp-bc559c",
@@ -409,6 +443,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "E", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
     info: "BC559C PNP 三极管\n极性：PNP（E 发射极流入、C 集电极流出）\n引脚（上→下）：C 集电极、B 基极、E 发射极",
+    infoEn: "BC559C PNP transistor\nPolarity: PNP (E emitter in, C collector out)\nPins (top→bottom): C collector, B base, E emitter",
   },
   {
     id: "jfet-j201",
@@ -425,6 +460,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "S", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
     info: "J201 N 沟道结型场效应管（JFET）\n引脚（上→下）：D 漏极、G 栅极、S 源极",
+    infoEn: "J201 N-channel JFET\nPins (top→bottom): D drain, G gate, S source",
   },
   {
     id: "nmos-2n7000",
@@ -441,6 +477,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "S", x: 0, y: 9.6, dx: -1, dy: 0, length: 12 },
     ],
     info: "2N7000 N 沟道 MOSFET\n引脚（上→下）：D 漏极、G 栅极、S 源极",
+    infoEn: "2N7000 N-channel MOSFET\nPins (top→bottom): D drain, G gate, S source",
   },
 
   // —— 运放 OP07（DIP-8，标准单运放引脚）——
@@ -448,6 +485,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "op07",
     kind: "opamp",
     label: "OP07 运放",
+    labelEn: "OP07 Op-Amp",
     value: "OP07",
     prefix: "U",
     bodyPathIds: ["path10", "path11", "path2", "path3", "path4", "path5", "path6", "path7", "path8", "path9"],
@@ -472,6 +510,15 @@ export const CATALOG: CatalogEntry[] = [
       "    V- │4    5│OFFSET\n" +
       "       └──────┘\n" +
       "1/5 OFFSET 调零，2 IN−，3 IN+，4 V−，6 OUT，7 V+，8 NC",
+    infoEn:
+      "OP07 precision op-amp (DIP-8)\n" +
+      "       ┌──────┐\n" +
+      " OFFSET│1    8│NC\n" +
+      "   IN- │2    7│V+\n" +
+      "   IN+ │3    6│OUT\n" +
+      "    V- │4    5│OFFSET\n" +
+      "       └──────┘\n" +
+      "1/5 OFFSET trim, 2 IN−, 3 IN+, 4 V−, 6 OUT, 7 V+, 8 NC",
   },
 
   // —— OP207 双运放（DIP-8，内部两个 OP07A 单运放，共用 V+/V-）——
@@ -479,6 +526,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "op207",
     kind: "opamp2",
     label: "OP207 双运放",
+    labelEn: "OP207 Dual Op-Amp",
     value: "OP207",
     prefix: "U",
     bodyPathIds: ["path10", "path11", "path2", "path3", "path4", "path5", "path6", "path7", "path8", "path9"],
@@ -513,6 +561,15 @@ export const CATALOG: CatalogEntry[] = [
       "    V− │4    5│IN+ B\n" +
       "       └──────┘\n" +
       "两个运放共用 V+（8 脚）与 V−（4 脚）",
+    infoEn:
+      "OP207 dual op-amp (DIP-8, two OP07A op-amps)\n" +
+      "       ┌──────┐\n" +
+      " OUT A │1    8│V+\n" +
+      " IN− A │2    7│OUT B\n" +
+      " IN+ A │3    6│IN− B\n" +
+      "    V− │4    5│IN+ B\n" +
+      "       └──────┘\n" +
+      "Both op-amps share V+ (pin 8) and V− (pin 4)",
   },
 
   // —— 电池（直流电压源，映射到 ngspice V 器件）——
@@ -520,6 +577,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "battery",
     kind: "power",
     label: "电池",
+    labelEn: "Battery",
     value: "9",
     unit: "V",
     prefix: "B",
@@ -531,6 +589,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "−", x: 0, y: 10, dx: 0, dy: 1, length: 27 },
     ],
     info: "电池 / 直流电压源\n双击蓝点设置电压\n后端映射为 ngspice 电压源（V 器件）",
+    infoEn: "Battery / DC voltage source\nDouble-click the blue dot to set voltage\nMapped to an ngspice voltage source (V device)",
   },
 
   // —— 接地 / GND（引脚映射到 ngspice 节点 0）——
@@ -538,6 +597,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "gnd",
     kind: "gnd",
     label: "接地",
+    labelEn: "Ground",
     value: "",
     prefix: "G",
     bodyPathIds: [],
@@ -547,6 +607,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "gnd", x: 0, y: -8, dx: 0, dy: -1, length: 20 },
     ],
     info: "接地 / GND\n引脚所在之处映射到 ngspice 节点 0（地）\n用于显式指定地参考",
+    infoEn: "Ground / GND\nWherever it connects maps to ngspice node 0 (ground)\nUsed to set the ground reference explicitly",
   },
 
   // —— 导线（直导线 + 弯导线）——
@@ -554,6 +615,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "wire",
     kind: "wire",
     label: "直导线",
+    labelEn: "Straight Wire",
     value: "",
     prefix: "W",
     bodyPathIds: [],
@@ -563,11 +625,13 @@ export const CATALOG: CatalogEntry[] = [
       { name: "2", x: 0, y: 0, dx: 0, dy: 0, length: 0 },
     ],
     info: "直导线（跳线）\n只能拖动两个端点改接孔位\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+    infoEn: "Straight wire (jumper)\nDrag the two endpoints to rewire\nDouble-click blue dot to set color, R to rotate\nMapped to a near-zero resistor",
   },
   {
     id: "wire-curve",
     kind: "wire",
     label: "弯导线",
+    labelEn: "Curved Wire",
     value: "",
     prefix: "W",
     bodyPathIds: [],
@@ -578,6 +642,7 @@ export const CATALOG: CatalogEntry[] = [
     ],
     curve: true,
     info: "弯导线（平滑曲线）\n拖动两端点改接孔位，拖动蓝点调整曲率\n双击蓝点设置颜色，R 键旋转\n后端映射为近零电阻",
+    infoEn: "Curved wire (smooth curve)\nDrag endpoints to rewire, drag blue dot to adjust curvature\nDouble-click blue dot to set color, R to rotate\nMapped to a near-zero resistor",
   },
 
   // —— 正弦波发生器（ngspice 正弦电压源）——
@@ -585,6 +650,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "vsine",
     kind: "vsine",
     label: "正弦波发生器",
+    labelEn: "Sine Generator",
     value: "",
     prefix: "S",
     bodyPathIds: [],
@@ -596,6 +662,7 @@ export const CATALOG: CatalogEntry[] = [
     ],
     params: { freq: "1k", ac: "0.2", dc: "0", phase: "0" },
     info: "正弦波发生器\n双击设置频率/交流电压/直流电压/相位\n后端映射为 ngspice 正弦电压源（SIN）",
+    infoEn: "Sine generator\nDouble-click to set frequency / AC voltage / DC voltage / phase\nMapped to an ngspice sine voltage source (SIN)",
   },
 
   // —— 音频输入（wave 文件转码后作为电压源）——
@@ -603,6 +670,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "audio",
     kind: "audio",
     label: "音频输入",
+    labelEn: "Audio Input",
     value: "",
     prefix: "W",
     bodyPathIds: [],
@@ -614,6 +682,7 @@ export const CATALOG: CatalogEntry[] = [
     ],
     params: {},
     info: "音频输入\n双击上传音频文件（后端经 ffmpeg 转码为 44.1kHz/16-bit/单声道）\n作为电压源输入；含音频时仅允许 tran 仿真",
+    infoEn: "Audio input\nDouble-click to upload an audio file (backend transcodes to 44.1kHz/16-bit/mono via ffmpeg)\nUsed as a voltage source; circuits with audio only allow tran",
   },
 
   // —— 电压表（10GΩ 采样 + 读节点电压）——
@@ -621,6 +690,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "voltmeter",
     kind: "voltmeter",
     label: "电压表",
+    labelEn: "Voltmeter",
     value: "",
     prefix: "VM",
     bodyPathIds: [],
@@ -631,6 +701,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "−", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
     ],
     info: "电压表\n双击显示两端电压差\n后端映射为大电阻（10000MΩ）+ 读节点电压",
+    infoEn: "Voltmeter\nDouble-click to show the voltage across its terminals\nMapped to a large resistor (10000MΩ) + node voltage readout",
   },
 
   // —— 电流表（0V 电压源电流探针 + 读电流）——
@@ -638,6 +709,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "ammeter",
     kind: "ammeter",
     label: "电流表",
+    labelEn: "Ammeter",
     value: "",
     prefix: "A",
     bodyPathIds: [],
@@ -648,6 +720,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "2", x: 0, y: 9, dx: 0, dy: 1, length: 27 },
     ],
     info: "电流表\n双击显示流经自身的电流\n后端映射为 0V 电压源电流探针（读 i(v<refdes>)）",
+    infoEn: "Ammeter\nDouble-click to show the current through it\nMapped to a 0V voltage-source current probe (reads i(v<refdes>))",
   },
 
   // —— 示波器（读 raw 波形）——
@@ -655,6 +728,7 @@ export const CATALOG: CatalogEntry[] = [
     id: "oscilloscope",
     kind: "oscilloscope",
     label: "示波器",
+    labelEn: "Oscilloscope",
     value: "",
     prefix: "X",
     bodyPathIds: [],
@@ -665,6 +739,7 @@ export const CATALOG: CatalogEntry[] = [
       { name: "gnd", x: 0, y: 8, dx: 0, dy: 1, length: 27 },
     ],
     info: "示波器\n双击打开示波器屏幕\n后端读取 ngspice raw 文件并绘制波形",
+    infoEn: "Oscilloscope\nDouble-click to open the scope screen\nBackend reads the ngspice raw file and draws the waveform",
   },
 ];
 

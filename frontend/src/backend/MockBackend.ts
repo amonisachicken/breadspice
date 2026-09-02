@@ -13,6 +13,7 @@
  */
 
 import type { Backend, BackendEventName } from "./Backend";
+import { t } from "../i18n";
 import type {
   BackendEvent,
   ComponentModel,
@@ -291,7 +292,7 @@ export class MockBackend implements Backend {
   }
 
   async uploadAudio(): Promise<{ id: string; duration: number }> {
-    throw new Error("Mock 后端不支持音频上传，请切换到真实后端");
+    throw new Error(t("mock.noUpload"));
   }
 
   async stopSimulation(): Promise<void> {
@@ -299,7 +300,7 @@ export class MockBackend implements Backend {
   }
 
   async fft(): Promise<{ x: number[]; y: number[] }> {
-    throw new Error("Mock 后端不支持 FFT，请切换到真实后端");
+    throw new Error(t("mock.noFft"));
   }
 
   on<K extends BackendEventName>(
